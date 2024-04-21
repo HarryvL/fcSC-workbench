@@ -54,10 +54,10 @@ source_code_path = os.path.join(dir_name, 'source code')
 sys.path.append(source_code_path)
 
 
-class fcVMWorkbench(Workbench):
+class fcSCWorkbench(Workbench):
     Icon = os.path.join(dir_name, "icons", "fcFEM.svg")
-    MenuText = "fcVM workbench"
-    ToolTip = "Plastic collapse analysis with the von Mises material model"
+    MenuText = "fcSC workbench"
+    ToolTip = "Simplified plastic collapse analysis of Structural Concrete"
 
     def __init__(self):
         import task_result_mechanical
@@ -383,4 +383,4 @@ class fcVMWorkbench(Workbench):
             self.averaged_option = "unaveraged"
 
 
-FreeCADGui.addWorkbench(fcVMWorkbench)
+FreeCADGui.addWorkbench(fcSCWorkbench)
