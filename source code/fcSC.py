@@ -23,7 +23,7 @@
 import os
 import time
 import math
-import dummy
+import dummySC
 import FemGui
 import FreeCAD
 import FreeCADGui
@@ -49,7 +49,9 @@ from matplotlib.ticker import FormatStrFormatter
 from femtaskpanels import task_result_mechanical as trm
 
 global mdir
-mdir = os.path.dirname(dummy.file_path())
+mdir = os.path.dirname(dummySC.file_path())
+
+print("fcSC.py")
 
 settings = {}
 try:

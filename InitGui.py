@@ -33,7 +33,7 @@ __Communication__ = "https://forum.freecad.org/viewtopic.php?t=85474"
 
 import os
 import sys
-import dummy
+import dummySC
 import FreeCAD
 import FreeCADGui
 from PySide2 import QtWidgets, QtGui, QtCore
@@ -41,7 +41,7 @@ from PySide2 import QtWidgets, QtGui, QtCore
 global FCmw
 FCmw = FreeCADGui.getMainWindow()
 global dir_name
-dir_name = os.path.dirname(dummy.file_path())
+dir_name = os.path.dirname(dummySC.file_path())
 global double_validator
 double_validator = QtGui.QDoubleValidator()
 global int_validator
@@ -68,8 +68,8 @@ class fcSCWorkbench(Workbench):
 
     def Initialize(self):
         from PySide2 import QtGui
-        self.appendToolbar("fcVM", [])
-        self.appendMenu("fcVM", [])
+        self.appendToolbar("fcSC", [])
+        self.appendMenu("fcSC", [])
         self.palette_warning = QtGui.QPalette()
         self.palette_warning.setColor(QtGui.QPalette.Base, QtGui.QColor("orange"))
         self.palette_standard = QtGui.QPalette()
@@ -80,15 +80,18 @@ class fcSCWorkbench(Workbench):
         from PySide2 import QtCore
         global fcVM_window
 
+        import dummySC
+        self.dir_name = os.path.dirname(dummySC.file_path())
+
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
-            self.doc = FreeCAD.newDocument("fcVM")
+            self.doc = FreeCAD.newDocument("fcSC")
 
         self.file_name = self.doc.Label
 
-        self.macro_file_path = os.path.join(dir_name, "source code", "fcVM.FCMacro")
+        self.macro_file_path = os.path.join(self.dir_name, "source code", "fcSC.FCMacro")
 
-        self.sum_file_path = os.path.join(dir_name, "source code", "fcVM_sum.FCMacro")
+        self.sum_file_path = os.path.join(self.dir_name, "source code", "fcSC_sum.FCMacro")
 
         self.disp_option = "incremental"
 
@@ -116,7 +119,7 @@ class fcSCWorkbench(Workbench):
         self.obs = DocObserver(self)
         FreeCAD.addDocumentObserver(self.obs)
 
-        ui_Path = os.path.join(dir_name, "user_interface", "fcVM.ui")
+        ui_Path = os.path.join(self.dir_name, "user_interface", "fcSC.ui")
 
         fcVM_window = FreeCADGui.PySideUic.loadUi(ui_Path)
 
@@ -198,8 +201,10 @@ class fcSCWorkbench(Workbench):
 
         FreeCADGui.Selection.clearSelection()
 
-        fcVM_macro = open(self.macro_file_path).read()
-        exec(fcVM_macro)
+        print(self.macro_file_path)
+
+        fcSC_macro = open(self.macro_file_path).read()
+        exec(fcSC_macro)
 
     def quit_clicked(self):
         self.Deactivated()
@@ -219,7 +224,7 @@ class fcSCWorkbench(Workbench):
         fcVM_window.averagedChk.setChecked(False)
 
     def save_clicked(self):
-        inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
+        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
         with open(inp_file_path, "w") as f:
             f.write(fcVM_window.YSinput.text() + "\n")
             f.write(fcVM_window.GXinput.text() + "\n")
@@ -240,13 +245,13 @@ class fcSCWorkbench(Workbench):
             f.write(self.averaged_option + "\n")
 
     def sum_clicked(self):
-        fcVM_sum = open(self.sum_file_path).read()
-        exec(fcVM_sum)
+        fcSC_sum = open(self.sum_file_path).read()
+        exec(fcSC_sum)
 
         return
 
     def open_file(self):
-        inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
+        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
         try:
             with open(inp_file_path, "r") as f:
                 fcVM_window.YSinput.setText(str(f.readline().strip()))

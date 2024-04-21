@@ -47,7 +47,7 @@ App.getUserAppDataDir()
 │   │   │
 │   │   ├── README.md
 │   │   │
-│   │   └── dummy.py
+│   │   └── dummySC.py
 │   │
 ```
 

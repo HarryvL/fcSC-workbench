@@ -22,23 +22,27 @@
 
 import os
 import sys
-import dummy
+import dummySC
 import numpy as np
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide2 import QtWidgets, QtGui, QtCore
 
-mdir = os.path.dirname(dummy.file_path())
+print("fcSC_sum.FCMacro")
+
+mdir = os.path.dirname(dummySC.file_path())
 name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
 
-if 'fcVM' in sys.modules.keys():
-    del (sys.modules['fcVM'])
+if 'fcSC' in sys.modules.keys():
+    del (sys.modules['fcSC'])
+    print("fcSC in sys.modules.keys")
 else:
     sys.path.append(macro_path)
+    print("fcSC path added")
 
-import fcVM as ft
+import fcSC as ft
 
 rv = FCmw.findChild(QtWidgets.QTextEdit, "Report view")
 rv.clear()
