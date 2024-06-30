@@ -161,8 +161,8 @@ class fcSCWorkbench(Workbench):
         fcSC_window.scale_3.setValidator(double_validator)
         fcSC_window.target_LF.setValidator(double_validator)
 
-        self.fc_default = "40.0"
-        self.fy_default = "400.0"
+        self.fc_default = "23.67"
+        self.fy_default = "348.0"
         self.GZinput_default = "-10.0"
         self.rho_x_default = "0.005"
         self.rho_y_default = "0.005"

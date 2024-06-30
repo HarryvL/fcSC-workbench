@@ -245,7 +245,7 @@
                      </size>
                     </property>
                     <property name="text">
-                     <string>400.0</string>
+                     <string>348.0</string>
                     </property>
                     <property name="frame">
                      <bool>true</bool>
@@ -274,7 +274,7 @@
                      </size>
                     </property>
                     <property name="text">
-                     <string>0.0</string>
+                     <string>23.67</string>
                     </property>
                    </widget>
                   </item>
