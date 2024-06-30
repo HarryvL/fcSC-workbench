@@ -20,11 +20,11 @@
 # *                                                                         *
 # ***************************************************************************
 
-__Title__ = "fcVM"
+__Title__ = "fcSC"
 __Author__ = "HarryvL"
 __Url__ = "https://github.com/HarryvL/fcVM-workbench"
 __Version__ = "1.1.0"
-__Date__ = "2024/02/25"
+__Date__ = "2024/06/25"
 __Comment__ = "first release"
 __Forum__ = "https://forum.freecad.org/viewtopic.php?t=85474"
 __Status__ = "initial development"
@@ -78,7 +78,7 @@ class fcSCWorkbench(Workbench):
 
     def Activated(self):
         from PySide2 import QtCore
-        global fcVM_window
+        global fcSC_window
 
         import dummySC
         self.dir_name = os.path.dirname(dummySC.file_path())
@@ -95,7 +95,7 @@ class fcSCWorkbench(Workbench):
 
         self.disp_option = "incremental"
 
-        self.csr_option = "PEEQ"
+        self.eps_option = "eps_c"
 
         self.averaged_option = "unaveraged"
 
@@ -104,14 +104,18 @@ class fcSCWorkbench(Workbench):
                 self.workbench_instance = workbench_instance
 
             def slotActivateDocument(self, doc):
+                print("slotActivateDocument")
                 if FreeCAD.activeDocument().Label[0:7] != "Unnamed":
+                    # print(self.workbench_instance.file_name)
                     self.workbench_instance.save_clicked()
                     self.workbench_instance.file_name = FreeCAD.activeDocument().Label
+                    # print(self.workbench_instance.file_name)
                     self.workbench_instance.open_file()
-                    fcVM_window.PEEQ.setText("0.000")
-                    fcVM_window.CSR.setText("0.000")
+                    fcSC_window.eps_c.setText("0.000")
+                    fcSC_window.eps_s.setText("0.000")
 
             def slotFinishSaveDocument(self, doc, prop):
+                print("slotFinishSaveDocument")
                 self.workbench_instance.save_clicked()  # save under old file name
                 self.workbench_instance.file_name = doc.Label
                 self.workbench_instance.save_clicked()  # save under new file name
@@ -121,47 +125,48 @@ class fcSCWorkbench(Workbench):
 
         ui_Path = os.path.join(self.dir_name, "user_interface", "fcSC.ui")
 
-        fcVM_window = FreeCADGui.PySideUic.loadUi(ui_Path)
+        fcSC_window = FreeCADGui.PySideUic.loadUi(ui_Path)
 
-        fcVM_window.startBtn.clicked.connect(self.start_clicked)
-        fcVM_window.quitBtn.clicked.connect(self.Deactivated)
-        fcVM_window.resetBtn.clicked.connect(self.reset_clicked)
-        fcVM_window.saveBtn.clicked.connect(self.save_clicked)
-        fcVM_window.sumBtn.clicked.connect(self.sum_clicked)
-        fcVM_window.totalRbtn.toggled.connect(self.btn_state)
-        fcVM_window.incrRbtn.toggled.connect(self.btn_state)
-        fcVM_window.peeqRbtn.toggled.connect(self.btn_state)
-        fcVM_window.csrRbtn.toggled.connect(self.btn_state)
-        fcVM_window.averagedChk.toggled.connect(self.btn_state)
+        fcSC_window.startBtn.clicked.connect(self.start_clicked)
+        fcSC_window.quitBtn.clicked.connect(self.Deactivated)
+        fcSC_window.resetBtn.clicked.connect(self.reset_clicked)
+        fcSC_window.saveBtn.clicked.connect(self.save_clicked)
+        fcSC_window.sumBtn.clicked.connect(self.sum_clicked)
+        fcSC_window.totalRbtn.toggled.connect(self.btn_state)
+        fcSC_window.incrRbtn.toggled.connect(self.btn_state)
+        fcSC_window.eps_cRbtn.toggled.connect(self.btn_state)
+        fcSC_window.eps_sRbtn.toggled.connect(self.btn_state)
+        fcSC_window.averagedChk.toggled.connect(self.btn_state)
 
-        fcVM_window.max_iter.textChanged.connect(self.max_iter_changed)
-        fcVM_window.relax.textChanged.connect(self.relax_changed)
-        fcVM_window.scale_1.textChanged.connect(self.scale_1_changed)
-        fcVM_window.scale_2.textChanged.connect(self.scale_2_changed)
-        fcVM_window.scale_3.textChanged.connect(self.scale_3_changed)
-        fcVM_window.Hinput.textChanged.connect(self.Hinput_changed)
+        fcSC_window.max_iter.textChanged.connect(self.max_iter_changed)
+        fcSC_window.relax.textChanged.connect(self.relax_changed)
+        fcSC_window.scale_1.textChanged.connect(self.scale_1_changed)
+        fcSC_window.scale_2.textChanged.connect(self.scale_2_changed)
+        fcSC_window.scale_3.textChanged.connect(self.scale_3_changed)
+        fcSC_window.rho_x.textChanged.connect(self.rho_x_changed)
+        fcSC_window.rho_y.textChanged.connect(self.rho_y_changed)
+        fcSC_window.rho_z.textChanged.connect(self.rho_z_changed)
 
-        fcVM_window.YSinput.setValidator(double_validator)
-        fcVM_window.Hinput.setValidator(double_validator)
-        fcVM_window.USinput.setValidator(double_validator)
-        fcVM_window.GXinput.setValidator(double_validator)
-        fcVM_window.GYinput.setValidator(double_validator)
-        fcVM_window.GZinput.setValidator(double_validator)
-        fcVM_window.steps.setValidator(int_validator)
-        fcVM_window.max_iter.setValidator(int_validator)
-        fcVM_window.error.setValidator(double_validator)
-        fcVM_window.relax.setValidator(double_validator)
-        fcVM_window.scale_1.setValidator(double_validator)
-        fcVM_window.scale_2.setValidator(double_validator)
-        fcVM_window.scale_3.setValidator(double_validator)
-        fcVM_window.target_LF.setValidator(double_validator)
+        fcSC_window.fy.setValidator(double_validator)
+        fcSC_window.fc.setValidator(double_validator)
+        fcSC_window.rho_x.setValidator(double_validator)
+        fcSC_window.rho_y.setValidator(double_validator)
+        fcSC_window.rho_z.setValidator(double_validator)
+        fcSC_window.steps.setValidator(int_validator)
+        fcSC_window.max_iter.setValidator(int_validator)
+        fcSC_window.error.setValidator(double_validator)
+        fcSC_window.relax.setValidator(double_validator)
+        fcSC_window.scale_1.setValidator(double_validator)
+        fcSC_window.scale_2.setValidator(double_validator)
+        fcSC_window.scale_3.setValidator(double_validator)
+        fcSC_window.target_LF.setValidator(double_validator)
 
-        self.YSinput_default = "240.0"
-        self.Hinput_default = "0.0"
-        self.USinput_default = "0.25"
-        self.GXinput_default = "0.0"
-        self.GYinput_default = "0.0"
+        self.fc_default = "40.0"
+        self.fy_default = "400.0"
         self.GZinput_default = "-10.0"
+        self.rho_x_default = "0.005"
+        self.rho_y_default = "0.005"
+        self.rho_z_default = "0.005"
         self.steps_default = "10"
         self.max_iter_default = "20"
         self.error_default = "1.0e-3"
@@ -171,18 +176,18 @@ class fcSCWorkbench(Workbench):
         self.scale_3_default = "1.2"
         self.target_LF_default = "2.0"
         self.disp_option_default = "incremental"
-        self.csr_option_default = "PEEQ"
+        self.eps_option_default = "eps_c"
         self.averaged_Chk_default = "unaveraged"
 
         self.open_file()
 
-        FCmw.addDockWidget(QtCore.Qt.RightDockWidgetArea, fcVM_window.dw)
+        FCmw.addDockWidget(QtCore.Qt.RightDockWidgetArea, fcSC_window.dw)
 
     def Deactivated(self):
 
         try:
-            if fcVM_window.dw.isVisible():
-                fcVM_window.dw.setVisible(False)
+            if fcSC_window.dw.isVisible():
+                fcSC_window.dw.setVisible(False)
         except Exception:
             None
 
@@ -210,38 +215,38 @@ class fcSCWorkbench(Workbench):
         self.Deactivated()
 
     def reset_clicked(self):
-        fcVM_window.max_iter.setText(self.max_iter_default)
-        fcVM_window.error.setText(self.error_default)
-        fcVM_window.relax.setText(self.relax_default)
-        fcVM_window.scale_1.setText(self.scale_1_default)
-        fcVM_window.scale_2.setText(self.scale_2_default)
-        fcVM_window.scale_3.setText(self.scale_3_default)
-        fcVM_window.relax.setPalette(self.palette_standard)
-        fcVM_window.scale_1.setPalette(self.palette_standard)
-        fcVM_window.scale_2.setPalette(self.palette_standard)
-        fcVM_window.scale_3.setPalette(self.palette_standard)
-        fcVM_window.incrRbtn.setChecked(True)
-        fcVM_window.averagedChk.setChecked(False)
+        fcSC_window.max_iter.setText(self.max_iter_default)
+        fcSC_window.error.setText(self.error_default)
+        fcSC_window.relax.setText(self.relax_default)
+        fcSC_window.scale_1.setText(self.scale_1_default)
+        fcSC_window.scale_2.setText(self.scale_2_default)
+        fcSC_window.scale_3.setText(self.scale_3_default)
+        fcSC_window.relax.setPalette(self.palette_standard)
+        fcSC_window.scale_1.setPalette(self.palette_standard)
+        fcSC_window.scale_2.setPalette(self.palette_standard)
+        fcSC_window.scale_3.setPalette(self.palette_standard)
+        fcSC_window.incrRbtn.setChecked(True)
+        fcSC_window.averagedChk.setChecked(False)
 
     def save_clicked(self):
-        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
+        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '_sc.inp')
         with open(inp_file_path, "w") as f:
-            f.write(fcVM_window.YSinput.text() + "\n")
-            f.write(fcVM_window.GXinput.text() + "\n")
-            f.write(fcVM_window.GYinput.text() + "\n")
-            f.write(fcVM_window.GZinput.text() + "\n")
-            f.write(fcVM_window.steps.text() + "\n")
-            f.write(fcVM_window.max_iter.text() + "\n")
-            f.write(fcVM_window.error.text() + "\n")
-            f.write(fcVM_window.relax.text() + "\n")
-            f.write(fcVM_window.scale_1.text() + "\n")
-            f.write(fcVM_window.scale_2.text() + "\n")
-            f.write(fcVM_window.scale_3.text() + "\n")
+            f.write(fcSC_window.fc.text() + "\n")
+            f.write(fcSC_window.fy.text() + "\n")
+            f.write(fcSC_window.GZinput.text() + "\n")
+            f.write(fcSC_window.rho_x.text() + "\n")
+            f.write(fcSC_window.rho_y.text() + "\n")
+            f.write(fcSC_window.rho_z.text() + "\n")
+            f.write(fcSC_window.steps.text() + "\n")
+            f.write(fcSC_window.max_iter.text() + "\n")
+            f.write(fcSC_window.error.text() + "\n")
+            f.write(fcSC_window.relax.text() + "\n")
+            f.write(fcSC_window.scale_1.text() + "\n")
+            f.write(fcSC_window.scale_2.text() + "\n")
+            f.write(fcSC_window.scale_3.text() + "\n")
             f.write(self.disp_option + "\n")
-            f.write(fcVM_window.USinput.text() + "\n")
-            f.write(fcVM_window.Hinput.text() + "\n")
-            f.write(fcVM_window.target_LF.text() + "\n")
-            f.write(self.csr_option + "\n")
+            f.write(fcSC_window.target_LF.text() + "\n")
+            f.write(self.eps_option + "\n")
             f.write(self.averaged_option + "\n")
 
     def sum_clicked(self):
@@ -251,138 +256,166 @@ class fcSCWorkbench(Workbench):
         return
 
     def open_file(self):
-        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
+        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '_sc.inp')
         try:
             with open(inp_file_path, "r") as f:
-                fcVM_window.YSinput.setText(str(f.readline().strip()))
-                fcVM_window.GXinput.setText(str(f.readline().strip()))
-                fcVM_window.GYinput.setText(str(f.readline().strip()))
-                fcVM_window.GZinput.setText(str(f.readline().strip()))
-                fcVM_window.steps.setText(str(f.readline().strip()))
-                fcVM_window.max_iter.setText(str(f.readline().strip()))
-                fcVM_window.error.setText(str(f.readline().strip()))
-                fcVM_window.relax.setText(str(f.readline().strip()))
-                fcVM_window.scale_1.setText(str(f.readline().strip()))
-                fcVM_window.scale_2.setText(str(f.readline().strip()))
-                fcVM_window.scale_3.setText(str(f.readline().strip()))
+                fcSC_window.fc.setText(str(f.readline().strip()))
+                fcSC_window.fy.setText(str(f.readline().strip()))
+                fcSC_window.GZinput.setText(str(f.readline().strip()))
+                fcSC_window.rho_x.setText(str(f.readline().strip()))
+                fcSC_window.rho_y.setText(str(f.readline().strip()))
+                fcSC_window.rho_z.setText(str(f.readline().strip()))
+                fcSC_window.steps.setText(str(f.readline().strip()))
+                fcSC_window.max_iter.setText(str(f.readline().strip()))
+                fcSC_window.error.setText(str(f.readline().strip()))
+                fcSC_window.relax.setText(str(f.readline().strip()))
+                fcSC_window.scale_1.setText(str(f.readline().strip()))
+                fcSC_window.scale_2.setText(str(f.readline().strip()))
+                fcSC_window.scale_3.setText(str(f.readline().strip()))
                 if str(f.readline().strip()) == "total":
-                    fcVM_window.totalRbtn.setChecked(True)
+                    fcSC_window.totalRbtn.setChecked(True)
                 else:
-                    fcVM_window.incrRbtn.setChecked(True)
-                USinp = str(f.readline().strip())
-                if USinp == "":
-                    fcVM_window.USinput.setText(self.USinput_default)
-                else:
-                    fcVM_window.USinput.setText(USinp)
-                Hinp = str(f.readline().strip())
-                if Hinp == "":
-                    fcVM_window.Hinput.setText(self.Hinput_default)
-                else:
-                    fcVM_window.Hinput.setText(Hinp)
+                    fcSC_window.incrRbtn.setChecked(True)
                 LFinp = str(f.readline().strip())
                 if LFinp == "":
-                    fcVM_window.target_LF.setText(self.target_LF_default)
+                    fcSC_window.target_LF.setText(self.target_LF_default)
                 else:
-                    fcVM_window.target_LF.setText(LFinp)
-                csrBtninp = f.readline().strip()
-                if csrBtninp == "CSR":
-                    fcVM_window.csrRbtn.setChecked(True)
+                    fcSC_window.target_LF.setText(LFinp)
+                epsBtninp = f.readline().strip()
+                if epsBtninp == "eps_c":
+                    fcSC_window.eps_cRbtn.setChecked(True)
                 else:
-                    fcVM_window.peeqRbtn.setChecked(True)
+                    fcSC_window.eps_sRbtn.setChecked(True)
                 avBtninp = str(f.readline().strip())
                 if avBtninp == "averaged":
-                    fcVM_window.averagedChk.setChecked(True)
+                    fcSC_window.averagedChk.setChecked(True)
                 else:
-                    fcVM_window.averagedChk.setChecked(False)
+                    fcSC_window.averagedChk.setChecked(False)
 
 
         except FileNotFoundError:
-            fcVM_window.YSinput.setText(self.YSinput_default)
-            fcVM_window.USinput.setText(self.USinput_default)
-            fcVM_window.GXinput.setText(self.GXinput_default)
-            fcVM_window.GYinput.setText(self.GYinput_default)
-            fcVM_window.GZinput.setText(self.GZinput_default)
-            fcVM_window.steps.setText(self.steps_default)
-            fcVM_window.max_iter.setText(self.max_iter_default)
-            fcVM_window.error.setText(self.error_default)
-            fcVM_window.relax.setText(self.relax_default)
-            fcVM_window.scale_1.setText(self.scale_1_default)
-            fcVM_window.scale_2.setText(self.scale_2_default)
-            fcVM_window.scale_3.setText(self.scale_3_default)
-            fcVM_window.incrRbtn.setChecked(True)
-            fcVM_window.USinput.setText(self.USinput_default)
-            fcVM_window.Hinput.setText(self.Hinput_default)
-            fcVM_window.target_LF.setText(self.target_LF_default)
-            fcVM_window.averagedChk.setChecked(False)
+            fcSC_window.fc.setText(self.fc_default)
+            fcSC_window.fy.setText(self.fy_default)
+            fcSC_window.GZinput.setText(self.GZinput_default)
+            fcSC_window.rho_x.setText(self.rho_x_default)
+            fcSC_window.rho_y.setText(self.rho_y_default)
+            fcSC_window.rho_z.setText(self.rho_z_default)
+            fcSC_window.steps.setText(self.steps_default)
+            fcSC_window.max_iter.setText(self.max_iter_default)
+            fcSC_window.error.setText(self.error_default)
+            fcSC_window.relax.setText(self.relax_default)
+            fcSC_window.scale_1.setText(self.scale_1_default)
+            fcSC_window.scale_2.setText(self.scale_2_default)
+            fcSC_window.scale_3.setText(self.scale_3_default)
+            fcSC_window.incrRbtn.setChecked(True)
+            fcSC_window.target_LF.setText(self.target_LF_default)
+            fcSC_window.eps_cRbtn.setChecked(True)
+            fcSC_window.averagedChk.setChecked(False)
 
     def max_iter_changed(self):
-        if (fcVM_window.max_iter.text() != self.max_iter_default):
-            fcVM_window.max_iter.setPalette(self.palette_warning)
+        if (fcSC_window.max_iter.text() != self.max_iter_default):
+            fcSC_window.max_iter.setPalette(self.palette_warning)
         else:
-            fcVM_window.max_iter.setPalette(self.palette_standard)
+            fcSC_window.max_iter.setPalette(self.palette_standard)
 
     def relax_changed(self):
-        if (fcVM_window.relax.text() != self.relax_default):
-            if fcVM_window.relax.text() == "":
-                fcVM_window.relax.setText("0.0")
-            if float(fcVM_window.relax.text()) > 1.5:
-                fcVM_window.relax.setText("1.5")
-            elif float(fcVM_window.relax.text()) < 1.0:
-                fcVM_window.relax.setText("1.0")
-            fcVM_window.relax.setPalette(self.palette_warning)
+        if (fcSC_window.relax.text() != self.relax_default):
+            if fcSC_window.relax.text() == "":
+                fcSC_window.relax.setText("0.0")
+            if float(fcSC_window.relax.text()) > 1.5:
+                fcSC_window.relax.setText("1.5")
+            elif float(fcSC_window.relax.text()) < 1.0:
+                fcSC_window.relax.setText("1.0")
+            fcSC_window.relax.setPalette(self.palette_warning)
         else:
-            fcVM_window.relax.setPalette(self.palette_standard)
+            fcSC_window.relax.setPalette(self.palette_standard)
 
     def scale_1_changed(self):
-        if (fcVM_window.scale_1.text() != self.scale_1_default):
-            if fcVM_window.scale_1.text() == "":
-                fcVM_window.scale_1.setText("0.0")
-            if float(fcVM_window.scale_1.text()) > 3.0:
-                fcVM_window.scale_1.setText("3.0")
-            elif float(fcVM_window.scale_1.text()) < 1.0:
-                fcVM_window.scale_1.setText("1.0")
-            fcVM_window.scale_1.setPalette(self.palette_warning)
+        if (fcSC_window.scale_1.text() != self.scale_1_default):
+            if fcSC_window.scale_1.text() == "":
+                fcSC_window.scale_1.setText("0.0")
+            if float(fcSC_window.scale_1.text()) > 3.0:
+                fcSC_window.scale_1.setText("3.0")
+            elif float(fcSC_window.scale_1.text()) < 1.0:
+                fcSC_window.scale_1.setText("1.0")
+            fcSC_window.scale_1.setPalette(self.palette_warning)
         else:
-            fcVM_window.scale_1.setPalette(self.palette_standard)
+            fcSC_window.scale_1.setPalette(self.palette_standard)
 
     def scale_2_changed(self):
-        if (fcVM_window.scale_2.text() != self.scale_2_default):
-            if fcVM_window.scale_2.text() == "":
-                fcVM_window.scale_2.setText("0.0")
-            if float(fcVM_window.scale_2.text()) > 2.0:
-                fcVM_window.scale_2.setText("2.0")
-            elif float(fcVM_window.scale_2.text()) < 1.0:
-                fcVM_window.scale_2.setText("1.0")
-            fcVM_window.scale_2.setPalette(self.palette_warning)
+        if (fcSC_window.scale_2.text() != self.scale_2_default):
+            if fcSC_window.scale_2.text() == "":
+                fcSC_window.scale_2.setText("0.0")
+            if float(fcSC_window.scale_2.text()) > 2.0:
+                fcSC_window.scale_2.setText("2.0")
+            elif float(fcSC_window.scale_2.text()) < 1.0:
+                fcSC_window.scale_2.setText("1.0")
+            fcSC_window.scale_2.setPalette(self.palette_warning)
         else:
-            fcVM_window.scale_2.setPalette(self.palette_standard)
+            fcSC_window.scale_2.setPalette(self.palette_standard)
 
     def scale_3_changed(self):
-        if fcVM_window.scale_3.text() == "":
-            fcVM_window.scale_3.setText("0.0")
-        if (fcVM_window.scale_3.text() != self.scale_3_default):
-            if float(fcVM_window.scale_3.text()) > 2.0:
-                fcVM_window.scale_3.setText("2.0")
-            elif float(fcVM_window.scale_3.text()) < 1.0:
-                fcVM_window.scale_3.setText("1.0")
-            fcVM_window.scale_3.setPalette(self.palette_warning)
+        if fcSC_window.scale_3.text() == "":
+            fcSC_window.scale_3.setText("0.0")
+        if (fcSC_window.scale_3.text() != self.scale_3_default):
+            if float(fcSC_window.scale_3.text()) > 2.0:
+                fcSC_window.scale_3.setText("2.0")
+            elif float(fcSC_window.scale_3.text()) < 1.0:
+                fcSC_window.scale_3.setText("1.0")
+            fcSC_window.scale_3.setPalette(self.palette_warning)
         else:
-            fcVM_window.scale_3.setPalette(self.palette_standard)
+            fcSC_window.scale_3.setPalette(self.palette_standard)
 
-    def Hinput_changed(self):
-        if float(fcVM_window.Hinput.text()) < 0.0:
-            fcVM_window.Hinput.setText("0.0")
+    def rho_x_changed(self):
+        try:
+            rx = float(fcSC_window.rho_x.text())
+        except ValueError:
+            rx = 0.0
+        if rx < 0.0:
+            fcSC_window.rho_x.setText(self.rho_x_default)
+            rx = float(self.rho_x_default)
+        if rx < float(self.rho_x_default):
+            fcSC_window.rho_x.setPalette(self.palette_warning)
+        else:
+            fcSC_window.rho_x.setPalette(self.palette_standard)
+
+    def rho_y_changed(self):
+        try:
+            ry = float(fcSC_window.rho_y.text())
+        except ValueError:
+            ry = 0.0
+        if ry < 0.0:
+            fcSC_window.rho_y.setText(self.rho_y_default)
+            ry = float(self.rho_y_default)
+        if ry < float(self.rho_y_default):
+            fcSC_window.rho_y.setPalette(self.palette_warning)
+        else:
+            fcSC_window.rho_y.setPalette(self.palette_standard)
+
+    def rho_z_changed(self):
+        try:
+            rz = float(fcSC_window.rho_z.text())
+        except ValueError:
+            rz = 0.0
+        if rz < 0.0:
+            fcSC_window.rho_z.setText(self.rho_z_default)
+            rz = float(self.rho_z_default)
+        if rz < float(self.rho_z_default):
+            fcSC_window.rho_z.setPalette(self.palette_warning)
+        else:
+            fcSC_window.rho_z.setPalette(self.palette_standard)
+
 
     def btn_state(self):
-        if fcVM_window.totalRbtn.isChecked():
+        if fcSC_window.totalRbtn.isChecked():
             self.disp_option = "total"
-        if fcVM_window.incrRbtn.isChecked():
+        if fcSC_window.incrRbtn.isChecked():
             self.disp_option = "incremental"
-        if fcVM_window.peeqRbtn.isChecked():
-            self.csr_option = "PEEQ"
-        if fcVM_window.csrRbtn.isChecked():
-            self.csr_option = "CSR"
-        if fcVM_window.averagedChk.isChecked():
+        if fcSC_window.eps_cRbtn.isChecked():
+            self.eps_option = "eps_c"
+        if fcSC_window.eps_sRbtn.isChecked():
+            self.eps_option = "eps_s"
+        if fcSC_window.averagedChk.isChecked():
             self.averaged_option = "averaged"
         else:
             self.averaged_option = "unaveraged"

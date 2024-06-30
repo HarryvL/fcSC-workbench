@@ -60,7 +60,7 @@
        </size>
       </property>
       <property name="windowTitle">
-       <string>fcVM</string>
+       <string>fcSC</string>
       </property>
       <widget class="QWidget" name="dockWidgetContents">
        <property name="sizePolicy">
@@ -166,143 +166,28 @@
                   <bool>false</bool>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_4">
-                  <item row="0" column="2">
-                   <widget class="QLineEdit" name="YSinput">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="maximumSize">
-                     <size>
-                      <width>150</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>240.0</string>
-                    </property>
-                    <property name="frame">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
                   <item row="0" column="0">
                    <widget class="QLabel" name="label">
                     <property name="text">
-                     <string>Yield Stress</string>
+                     <string>fc_design</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="4">
-                   <widget class="QLabel" name="label_17">
+                  <item row="3" column="4">
+                   <widget class="QLabel" name="label_15">
                     <property name="text">
-                     <string>(MPa/MPa)</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="2">
-                   <layout class="QVBoxLayout" name="verticalLayout">
-                    <property name="spacing">
-                     <number>0</number>
-                    </property>
-                    <property name="sizeConstraint">
-                     <enum>QLayout::SetFixedSize</enum>
-                    </property>
-                    <item>
-                     <widget class="QLabel" name="label_4">
-                      <property name="minimumSize">
-                       <size>
-                        <width>0</width>
-                        <height>27</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize">
-                       <size>
-                        <width>16777215</width>
-                        <height>27</height>
-                       </size>
-                      </property>
-                      <property name="text">
-                       <string>g_y  (m/s2)</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="GYinput">
-                      <property name="minimumSize">
-                       <size>
-                        <width>0</width>
-                        <height>27</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize">
-                       <size>
-                        <width>150</width>
-                        <height>27</height>
-                       </size>
-                      </property>
-                      <property name="text">
-                       <string>0.0</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </item>
-                  <item row="0" column="4">
-                   <widget class="QLabel" name="label_3">
-                    <property name="text">
-                     <string>(MPa)</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="0">
-                   <widget class="QLabel" name="label_14">
-                    <property name="text">
-                     <string>Ultimate Strain</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="2">
-                   <widget class="QLineEdit" name="Hinput">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="maximumSize">
-                     <size>
-                      <width>150</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>0.0</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="2">
-                   <widget class="QLineEdit" name="USinput">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="maximumSize">
-                     <size>
-                      <width>150</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>0.25</string>
+                     <string>(m/s2)</string>
                     </property>
                    </widget>
                   </item>
                   <item row="3" column="0">
+                   <widget class="QLabel" name="label_14">
+                    <property name="text">
+                     <string>g_z</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="4" column="0">
                    <layout class="QVBoxLayout" name="verticalLayout_4">
                     <property name="spacing">
                      <number>0</number>
@@ -325,12 +210,84 @@
                        </size>
                       </property>
                       <property name="text">
-                       <string>g_x (m/s2)</string>
+                       <string>rho_x (As/Ac)</string>
                       </property>
                      </widget>
                     </item>
+                   </layout>
+                  </item>
+                  <item row="1" column="0">
+                   <widget class="QLabel" name="label_16">
+                    <property name="text">
+                     <string>fy_design</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="4">
+                   <widget class="QLabel" name="label_17">
+                    <property name="text">
+                     <string>(MPa)</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="2">
+                   <widget class="QLineEdit" name="fy">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>400.0</string>
+                    </property>
+                    <property name="frame">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="4">
+                   <widget class="QLabel" name="label_3">
+                    <property name="text">
+                     <string>(MPa)</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="2">
+                   <widget class="QLineEdit" name="fc">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>0.0</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="4" column="2">
+                   <layout class="QVBoxLayout" name="verticalLayout">
+                    <property name="spacing">
+                     <number>0</number>
+                    </property>
+                    <property name="sizeConstraint">
+                     <enum>QLayout::SetFixedSize</enum>
+                    </property>
                     <item>
-                     <widget class="QLineEdit" name="GXinput">
+                     <widget class="QLabel" name="label_4">
                       <property name="minimumSize">
                        <size>
                         <width>0</width>
@@ -339,32 +296,18 @@
                       </property>
                       <property name="maximumSize">
                        <size>
-                        <width>150</width>
+                        <width>16777215</width>
                         <height>27</height>
                        </size>
                       </property>
                       <property name="text">
-                       <string>0.0</string>
+                       <string>rho_y (As/Ac)</string>
                       </property>
                      </widget>
                     </item>
                    </layout>
                   </item>
-                  <item row="2" column="4">
-                   <widget class="QLabel" name="label_15">
-                    <property name="text">
-                     <string>(mm/mm)</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="0">
-                   <widget class="QLabel" name="label_16">
-                    <property name="text">
-                     <string>E_t / E</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="4">
+                  <item row="4" column="4">
                    <layout class="QVBoxLayout" name="verticalLayout_5">
                     <property name="spacing">
                      <number>0</number>
@@ -387,30 +330,87 @@
                        </size>
                       </property>
                       <property name="text">
-                       <string>g_z (m/s2)</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="GZinput">
-                      <property name="minimumSize">
-                       <size>
-                        <width>0</width>
-                        <height>27</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize">
-                       <size>
-                        <width>150</width>
-                        <height>27</height>
-                       </size>
-                      </property>
-                      <property name="text">
-                       <string>-10.0</string>
+                       <string>rho_z (As/Ac)</string>
                       </property>
                      </widget>
                     </item>
                    </layout>
+                  </item>
+                  <item row="5" column="4">
+                   <widget class="QLineEdit" name="rho_z">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>0.005</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="3" column="2">
+                   <widget class="QLineEdit" name="GZinput">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>-10.0</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="5" column="2">
+                   <widget class="QLineEdit" name="rho_y">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>0.005</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="5" column="0">
+                   <widget class="QLineEdit" name="rho_x">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>0.005</string>
+                    </property>
+                   </widget>
                   </item>
                  </layout>
                 </widget>
@@ -449,7 +449,7 @@
                     </property>
                     <layout class="QVBoxLayout" name="verticalLayout_9">
                      <item>
-                      <widget class="QRadioButton" name="peeqRbtn">
+                      <widget class="QRadioButton" name="eps_cRbtn">
                        <property name="minimumSize">
                         <size>
                          <width>0</width>
@@ -457,7 +457,7 @@
                         </size>
                        </property>
                        <property name="text">
-                        <string>PEEQ</string>
+                        <string>eps_c</string>
                        </property>
                        <property name="checked">
                         <bool>true</bool>
@@ -465,7 +465,7 @@
                       </widget>
                      </item>
                      <item>
-                      <widget class="QRadioButton" name="csrRbtn">
+                      <widget class="QRadioButton" name="eps_sRbtn">
                        <property name="minimumSize">
                         <size>
                          <width>0</width>
@@ -473,7 +473,7 @@
                         </size>
                        </property>
                        <property name="text">
-                        <string>CSR</string>
+                        <string>eps_s</string>
                        </property>
                        <property name="checked">
                         <bool>false</bool>
@@ -490,7 +490,7 @@
                      <item>
                       <widget class="QCheckBox" name="averagedChk">
                        <property name="text">
-                        <string>Averaged</string>
+                        <string>Nodal Averaged</string>
                        </property>
                       </widget>
                      </item>
@@ -857,7 +857,7 @@
                   <item>
                    <layout class="QGridLayout" name="gridLayout_7">
                     <item row="1" column="1">
-                     <widget class="QLineEdit" name="PEEQ">
+                     <widget class="QLineEdit" name="eps_c">
                       <property name="text">
                        <string>0.000</string>
                       </property>
@@ -886,6 +886,9 @@
                       <property name="alignment">
                        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                       </property>
+                      <property name="indent">
+                       <number>0</number>
+                      </property>
                      </widget>
                     </item>
                     <item row="1" column="2">
@@ -897,10 +900,13 @@
                        </size>
                       </property>
                       <property name="text">
-                       <string>CSR:</string>
+                       <string>eps_s: </string>
                       </property>
                       <property name="alignment">
                        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                      </property>
+                      <property name="indent">
+                       <number>0</number>
                       </property>
                      </widget>
                     </item>
@@ -925,7 +931,7 @@
                      </widget>
                     </item>
                     <item row="1" column="3">
-                     <widget class="QLineEdit" name="CSR">
+                     <widget class="QLineEdit" name="eps_s">
                       <property name="text">
                        <string>0.000</string>
                       </property>
@@ -943,10 +949,13 @@
                        </size>
                       </property>
                       <property name="text">
-                       <string>PEEQ: </string>
+                       <string>eps_c: </string>
                       </property>
                       <property name="alignment">
                        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                      </property>
+                      <property name="indent">
+                       <number>0</number>
                       </property>
                      </widget>
                     </item>
@@ -965,10 +974,13 @@
                        </size>
                       </property>
                       <property name="text">
-                       <string>Load Factor:</string>
+                       <string>Load Factor: </string>
                       </property>
                       <property name="alignment">
                        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                      </property>
+                      <property name="indent">
+                       <number>0</number>
                       </property>
                      </widget>
                     </item>

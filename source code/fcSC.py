@@ -80,7 +80,7 @@ np.set_printoptions(precision=5, linewidth=300)
 def prn_upd(*args):
     for obj in args:
         print(str(obj), end='')
-    print('\n')
+    print()
     Gui.updateGui()
 
 
@@ -311,11 +311,15 @@ def setUpInput(doc, mesh, analysis):
         el[4], el[6] = el[6], el[4]
         el[8], el[9] = el[9], el[8]
 
+    a_c = np.zeros(4 * len(elNodes), dtype=np.uint8)
+    a_s = np.ones(12 * len(elNodes), dtype=np.float64)
+    ev = np.zeros(24 * len(elNodes), dtype=np.float64)
+
     return (elNodes, nocoord, fix, fixdof, movdof, materialbyElement, noce,
             loadfaces, pressure,
             loadvertices, vertexloads,
             loadedges, edgeloads,
-            loadfaces_uni, faceloads)
+            loadfaces_uni, faceloads, a_c, a_s, ev)
 
 
 # shape functions for a 4-node tetrahedron - only used for stress interpolation
@@ -351,12 +355,13 @@ def shp10tet(xi, et, ze):
     return shp
 
 
-@jit("float64(float64, float64, float64, float64[:,:], float64[:,:])", nopython=True, cache=True, fastmath=True)
-def dshp10tet(xi, et, ze, xl, bmat):
+@jit(nopython=True, cache=True, fastmath=True)
+def dshp10tet(xi, et, ze, xl):
     dshp = np.zeros((3, 10), dtype=np.float64)
     dshpg = np.zeros((3, 10), dtype=np.float64)
     xs = np.zeros((3, 3), dtype=np.float64)
     xsi = np.zeros((3, 3), dtype=np.float64)
+    bmat = np.zeros((6, 30), dtype=np.float64)
 
     # local derivatives of the shape functions: xi-derivative - source: Calculix, G Dhondt
     dshp[0][0] = 1.0 - 4.0 * (1.0 - xi - et - ze)
@@ -446,7 +451,7 @@ def dshp10tet(xi, et, ze, xl, bmat):
         bmat[5][i3 + 1] = d20
         bmat[5][i3 + 2] = d10
 
-    return xsj
+    return xsj, bmat
 
 
 # shape functions and their derivatives for a 6-node triangular interface element
@@ -537,18 +542,63 @@ def shape2lin(xi, xle):
 # linear-elastic material stiffness matrix
 
 @jit(nopython=True, cache=True)
-def hooke(element, materialbyElement, dmat):
-    e = materialbyElement[element][0]  # Young's Modulus
-    nu = materialbyElement[element][1]  # Poisson's Ratio
-    dm = e * (1.0 - nu) / (1.0 + nu) / (1.0 - 2.0 * nu)
-    od = nu / (1.0 - nu)
-    sd = 0.5 * (1.0 - 2.0 * nu) / (1.0 - nu)
+def hooke(element, materialbyElement, active_c, active_s, ev, rhox, rhoy, rhoz, Es):
+    margin = 1.3
+    dmat = np.zeros((6, 6), dtype=np.float64)
+    # e = materialbyElement[element][0] + (rhox + rhoy + rhoz) * Es / 3
+    e = materialbyElement[element][0] + max(rhox, rhoy, rhoz) * Es / 3
+    e = materialbyElement[element][0]
+    dmat[0][0] = dmat[1][1] = dmat[2][2] = e
+    dmat[3][3] = dmat[4][4] = dmat[5][5] = e / 2.0
 
-    dmat[0][0] = dmat[1][1] = dmat[2][2] = 1.0
-    dmat[3][3] = dmat[4][4] = dmat[5][5] = sd
-    dmat[0][1] = dmat[0][2] = dmat[1][2] = od
-    dmat[1][0] = dmat[2][0] = dmat[2][1] = od
-    dmat *= dm
+    u = ev[0:3]
+    v = ev[3:6]
+
+    df1ds = np.array([u[0] ** 2, u[1] ** 2, u[2] ** 2, 2 * u[0] * u[1], 2 * u[2] * u[0], 2 * u[1] * u[2]])
+    df2ds = np.array([v[0] ** 2, v[1] ** 2, v[2] ** 2, 2 * v[0] * v[1], 2 * v[2] * v[0], 2 * v[1] * v[2]])
+
+    # df1ds = np.array([u[0] ** 2, u[1] ** 2, u[2] ** 2, u[0] * u[1], u[1] * u[2], u[2] * u[0]])
+    # print("np.dot(dmat, df1ds)", np.dot(dmat, df1ds))
+
+    # print("u: ", u)
+    # print("v: ", v)
+    # print(active_c)
+
+    if active_c == 1:  # one yield surface
+        # print("e, d: ", e, d)
+        # print("df1ds: ", df1ds)
+        dfdf = np.dot(df1ds.reshape(1, 6).T, df1ds.reshape(1, 6))
+        # print("dfdf: ")
+        # for row in dfdf:
+        #     print(row)
+        M = np.eye(6) - np.dot(dfdf, dmat) / (margin * e)
+        # dmat = dmat - e * dfdf
+        # print("M: ")
+        # for row in M:
+        #     print(row)
+        dmat = np.dot(dmat, M)
+
+    elif active_c == 2:  # two yield surfaces
+        df1df1 = np.dot(df1ds.reshape(1, 6).T, df1ds.reshape(1, 6))
+        df2df2 = np.dot(df2ds.reshape(1, 6).T, df2ds.reshape(1, 6))
+        M = np.eye(6) - np.dot(df1df1 + df2df2, dmat) / (margin * e)
+        dmat = np.dot(dmat, M)
+    elif active_c == 3:  # apex
+        dmat = (1.0 - 1.0 / margin) * dmat
+
+    # print(active_c)
+
+    # print("active_c: ", active_c)
+
+    # dmat[0][0] += active_s[0] * rhox * Es
+    # dmat[1][1] += active_s[1] * rhoy * Es
+    # dmat[2][2] += active_s[2] * rhoz * Es
+
+    # dmat[0][0] +=  rhox * Es
+    # dmat[1][1] +=  rhoy * Es
+    # dmat[2][2] +=  rhoz * Es
+
+    return dmat
 
 
 # Gaussian integration points and weights
@@ -587,8 +637,9 @@ def gaussPoints():
 #     "types.Tuple((float64[:],int64[:], int64[:], float64[:], float64[:]))(int64[:,:], float64[:,:], float64[:,:], DictType(int64,float64), int64[:,:], float64, float64, float64, float64[:])",
 #     nopython=True, cache=True)
 @jit(nopython=True, cache=True)
-def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, loadfaces, pressure,
-            loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads):
+def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, loadfaces, pressure,
+            loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, a_c, a_s, ev):
+    print("inside calcGSM")
     gp10, gp6, gp2 = gaussPoints()
     ne = len(elNodes)  # number of volume elements
     # nn = len(nocoord[:, 0])  # number of degrees of freedom
@@ -609,7 +660,6 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     stm = np.zeros(ns, dtype=types.float64)  # stiffness values of COO matrix
     modf = np.zeros((3 * nn), dtype=types.float64)  # modification to the stiffness matrix for displacement BCs
     dof = np.zeros(30, dtype=types.int64)
-    dmat = np.zeros((6, 6), dtype=np.float64)
     bmatV = np.zeros((6, 30), dtype=np.float64)
     x = np.zeros((4 * ne, 3), dtype=np.float64)
 
@@ -702,7 +752,6 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
 
     V = 0.0
 
-    hooke(0, materialbyElement, dmat)
     density = materialbyElement[0][2]
 
     for el, nodes in enumerate(elNodes):
@@ -717,14 +766,17 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
 
         # integrate element matrix
         for i, ip in enumerate(gp10):
+            # dmat = np.zeros((6, 6), dtype=np.float64)
+
+            dmat = hooke(0, materialbyElement, 0,
+                         np.array(3 * [1.0]), np.array(6 * [1.0]), rhox, rhoy, rhoz, 210000.0)
+
             xi = ip[0]
             et = ip[1]
             ze = ip[2]
             shp = shp10tet(xi, et, ze)
-            xsj = dshp10tet(xi, et, ze, xlv, bmatV)
+            xsj, bmatV = dshp10tet(xi, et, ze, xlv)
             esm += np.dot(bmatV.T, np.dot(dmat, bmatV)) * ip[3] * abs(xsj)
-            gamma[0::3] += grav_x * density * shp * ip[3] * abs(xsj)
-            gamma[1::3] += grav_y * density * shp * ip[3] * abs(xsj)
             gamma[2::3] += grav_z * density * shp * ip[3] * abs(xsj)
             V += xsj * ip[3]  # Element volume - not used
             x[4 * el + i] = np.dot(xlv.T, shp)  #
@@ -764,9 +816,9 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
                         stm[pos] = esm[i][j]
                         pos += 1
 
-    row = row[:pos]
-    col = col[:pos]
-    stm = stm[:pos]
+    row_r = row[:pos]
+    col_r = col[:pos]
+    stm_r = stm[:pos]
 
     loadsumx = 0.0
     loadsumy = 0.0
@@ -782,31 +834,142 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     print("loadsumy", loadsumy)
     print("loadsumz", loadsumz, "\n")
 
-    return stm, row, col, glv, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x
+    # for rw in dmat:
+    #     print(rw)
+    # print()
+
+    # print("ns, pos: ", ns, pos)
+
+    return stm_r, row_r, col_r, glv, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x
+
+
+@jit(nopython=True, cache=True)
+def calcTSM(elNodes, nocoord, materialbyElement, fix, rhox, rhoy, rhoz, a_c, a_s, ev):
+    print("-------------------------calcTSM-------------------------")
+    gp10, gp6, gp2 = gaussPoints()
+    ne = len(elNodes)  # number of volume elements
+    # nn = len(nocoord[:, 0])  # number of degrees of freedom
+    nn = len(nocoord)  # number of nodes
+
+    # number of entries in the lower diagonal of the stiffness matrix: (dof**2 + dof) / 2
+    ns = int((30 * 30 + 30) / 2 * ne)
+
+    # print(f"ne = {ne}")
+    # print(f"ns = {ns}\n")
+
+    print(a_s[0:3])
+
+    xlv = np.zeros((10, 3), dtype=types.float64)  # coordinates of volume element nodes
+    row = np.zeros(ns, dtype=types.int64)  # row indices of COO matrix
+    col = np.zeros(ns, dtype=types.int64)  # column indices of COO matrix
+    stm = np.zeros(ns, dtype=types.float64)  # stiffness values of COO matrix
+    modf = np.zeros((3 * nn), dtype=types.float64)  # modification to the stiffness matrix for displacement BCs
+    dof = np.zeros(30, dtype=types.int64)
+
+    # for each volume element calculate the element stiffness matrix
+    # and add to global matrix and vector
+
+    pos = 0
+
+    for el, nodes in enumerate(elNodes):
+        esm = np.zeros((30, 30), dtype=np.float64)
+
+        # set up nodal values for this element
+        for i in range(3):
+            for j in range(10):
+                nd = nodes[j]
+                xlv[j][i] = nocoord[nd - 1][i]
+
+        # integrate element matrix
+        for i, ip in enumerate(gp10):
+            # dmat = np.zeros((6, 6), dtype=np.float64)
+            # print(rhox, rhoy, rhoz)
+
+            dmat = hooke(0, materialbyElement, a_c[4 * el + i],
+                         a_s[12 * el + 3 * i:12 * el + 3 * i + 3], ev[24 * el + 6 * i:24 * el + 6 * i + 6], rhox, rhoy,
+                         rhoz,
+                         210000.0)
+            # dmat = hooke(0, materialbyElement, 0,
+            #              np.array(3 * [1.0]), np.array(6 * [1.0]), rhox, rhoy, rhoz, 210000.0)
+
+            # print(a_c[4 * el + i])
+            # print(dmat[0][0])
+            xi = ip[0]
+            et = ip[1]
+            ze = ip[2]
+            xsj, bmatV = dshp10tet(xi, et, ze, xlv)
+            esm += np.dot(bmatV.T, np.dot(dmat, bmatV)) * ip[3] * abs(xsj)
+
+        for i in range(10):
+            nd = nodes[i] - 1
+            for j in range(3):
+                dof[3 * i + j] = 3 * nd + j
+
+        for i in range(30):
+            dofi = dof[i]
+            if dofi in fix:
+                row[pos] = dofi
+                col[pos] = dofi
+                stm[pos] = 1.0
+                modf[dofi] += fix[dofi]
+                pos += 1
+                for j in range(i):
+                    dofj = dof[j]
+                    if dofj not in fix:
+                        modf[dofj] -= esm[i][j] * fix[dofi]
+            else:
+                for j in range(i + 1):
+                    dofj = dof[j]
+                    if dofj in fix:
+                        modf[dofi] -= esm[i][j] * fix[dofj]
+                    else:
+                        if dofi > dofj:
+                            row[pos] = dofi
+                            col[pos] = dofj
+                        else:
+                            row[pos] = dofj
+                            col[pos] = dofi
+                        stm[pos] = esm[i][j]
+                        pos += 1
+
+    row_r = row[:pos]
+    col_r = col[:pos]
+    stm_r = stm[:pos]
+
+    # print("dmat")
+    # for rw in dmat:
+    #     print(rw)
+    # print()
+    #
+    # print("esm")
+    # for rw in esm:
+    #     print(rw)
+    #     print()
+    # print()
+    #
+    #
+    # print("ns, pos: ", ns, pos)
+
+    return stm_r, row_r, col_r, modf
 
 
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
-             glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield_inp, disp_output,
-             ultimate_strain, fcVM_window, Et_E, target_LF, x, noce):
+             glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield_inp, disp_output,
+             fcSC_window, target_LF, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix):
     ndof = len(glv)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
 
-    pr_u = fcVM_window.progressBar.setValue
-    st_u = fcVM_window.Step.setText
-    LF_u = fcVM_window.Load_Factor.setText
-    PQ_u = fcVM_window.PEEQ.setText
-    CR_u = fcVM_window.CSR.setText
+    pr_u = fcSC_window.progressBar.setValue
+    st_u = fcSC_window.Step.setText
+    LF_u = fcSC_window.Load_Factor.setText
+    EC_u = fcSC_window.eps_c.setText
+    ES_u = fcSC_window.eps_s.setText
 
     t0 = time.perf_counter()
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
     prn_upd("construct sparse global stiffness matrix: {:.2e} s".format((t1 - t0)))
-
-    # gsm_dense = gsm.todense()
-    #
-    # for i in range(len(gsm_dense)):
-    #     print(i, gsm_dense[i,i])
 
     # TODO: improve error estimate for pure displacement control
     qnorm = np.linalg.norm(glv)
@@ -831,11 +994,16 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     elif settings["solver"] == 3:
         ue = sparse_cholesky.solve_A(f)
 
+    # gsmd = gsm.todense().A
+    # gsmd = np.tril(gsmd) + np.tril(gsmd, -1).T
+    # Q = np.dot(gsmd, ue)
+    # print("ERROR Elastic Stiffness Matrix: ", np.linalg.norm(Q - f) / np.linalg.norm(f))
+
     t2 = time.perf_counter()
     prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
 
     # initiate analysis
-    dl0 = 1.0 / nstep  # nstep == 1 execute an elastic analysis
+    dl0 = min(target_LF, 1.0) / nstep  # nstep == 1 execute an elastic analysis
     dl = dl0
     du = dl * ue
 
@@ -853,14 +1021,15 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     disp_old = np.zeros(ndof, dtype=np.float64)  # displacement results
     lbd = np.zeros(1, dtype=np.float64)  # load level
     rfl = np.zeros(1, dtype=np.float64)  # reaction force level (for displacement control)
+    qin = np.zeros(3 * len(nocoord), dtype=np.float64)
 
     gp10, gp6, gp2 = gaussPoints()
 
     # determine elastic reaction force on moving boundary
     if max(movdof) == 1:
         qelastic = np.zeros(3 * len(nocoord), dtype=np.float64)
-        update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, ue, sig_old, sig_new, sig_test,
-                           qelastic, Et_E)
+        update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, ue, sig_old, sig_new,
+                           sig_test, qelastic, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0)
 
         qelastic *= movdof
         qelnorm = np.linalg.norm(qelastic)
@@ -893,54 +1062,147 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         un.append(np.max(np.abs(disp_new)))
         qin = np.zeros(3 * len(nocoord), dtype=np.float64)
         sig_yield *= 1.0e6
-        update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, ue, sig_old, sig_new, sig_test,
-                           qin, Et_E)
+        update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, ue, sig_old, sig_new,
+                           sig_test, qin, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0)
 
         cnt = False
 
     factor_time_tot = 0.0
     iterat_tot = 0
 
+    # fex_sum = 0.0
+    # for node in range(len(nocoord)):
+    #     dof = 3 * node
+    #     fex_sum += f[dof]
+    # print("(fixdof * glv + modf)_sum (after GSM): ", fex_sum)
+    # print("ue_max (after GSM): ", np.max(ue))
+    # print("elastic stiffness GSM: ", fex_sum / np.max(ue))
+
+    error = 0.0
+
     while cnt:
         cnt = False
         iRiks = True
         pstep = 0
         pr_u(0)
-        for _ in (range(nstep)):
+        while pstep < nstep:
             step += 1
             pstep += 1
             st_u(str(pstep))
             restart = 0
 
-            prn_upd("Step: {}".format(step))
-            a = du.copy()  # a: Riks control vector
+            prn_upd("\n***************************** Step: {} *****************************".format(step))
             if iRiks:
+                a = du.copy()  # a: Riks control vector
+                # print("np.linalg.norm(a)", np.linalg.norm(a))
+                a /= np.linalg.norm(a)
                 sig_old = sig_new.copy()
                 lbd = np.append(lbd, lbd[step] + dl)  # lbd: load level
             else:
                 lbd[step + 1] = lbd[step] + dl
 
             # update stresses and loads
-            qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-            update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new, sig_test,
-                               qin, Et_E)
 
-            # calculate residual load vector
+            qin_old = qin.copy()
+
+            qin = np.zeros(3 * len(nocoord), dtype=np.float64)
+
+            iterat = 0
+
+            # print("du_0_max: ", np.max(du))
+
+            update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig_old, sig_new,
+                               sig_test, qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat)
+
+            # print("sig_new_max: ", np.max(sig_new))
+
             fex = fixdof * lbd[step + 1] * glv
             fin = fixdof * qin
             r = fex - fin
+
+            # fex_sum_x = 0.0
+            # fin_sum_x = 0.0
+            # fex_sum_y = 0.0
+            # fin_sum_y = 0.0
+            # fex_sum_z = 0.0
+            # fin_sum_z = 0.0
+            # rx_sum = 0.0
+            # ry_sum = 0.0
+            # rz_sum = 0.0
+            # for node in range(len(nocoord)):
+            #     dof = 3 * node
+            #     fex_sum_x += fex[dof]
+            #     fin_sum_x += fin[dof]
+            #     rx_sum += r[dof]
+            #     fex_sum_y += fex[dof + 1]
+            #     fin_sum_y += fin[dof + 1]
+            #     ry_sum += r[dof + 1]
+            #     fex_sum_z += fex[dof + 2]
+            #     fin_sum_z += fin[dof + 2]
+            #     rz_sum += r[dof + 2]
+            # print("lbd[step + 1]: ", lbd[step + 1])
+            # print("fixdof * lbd[step + 1] * glv_sum X (before TSM): ", fex_sum_x)
+            # print("fixdof * qin_sum X: ", fin_sum_x)
+            # print("rx_sum: ", rx_sum)
+            # print("fixdof * lbd[step + 1] * glv_sum Y (before TSM): ", fex_sum_y)
+            # print("fixdof * qin_sum Y: ", fin_sum_y)
+            # print("ry_sum: ", ry_sum)
+            # print("fixdof * lbd[step + 1] * glv_sum Z (before TSM): ", fex_sum_z)
+            # print("fixdof * qin_sum Z: ", fin_sum_z)
+            # print("rz_sum: ", rz_sum)
+
             rnorm = np.linalg.norm(r)
+            # qnorm = np.linalg.norm(fin)
 
             # out-of-balance error
+
+            error_old = error
+
             error = rnorm / qnorm
 
-            iterat = 0
             prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
+
+            # tangent stiffness matrix
+
+            # if error > error_max:
+            #     stm, row, col, modf = calcTSM(elNodes, nocoord, materialbyElement, fix, rhox, rhoy, rhoz, a_c,
+            #                                   a_s, ev)
+            #     t0 = time.perf_counter()
+            #     tsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
+            #     t1 = time.perf_counter()
+            #     prn_upd("construct sparse tangent stiffness matrix: {:.2e} s".format((t1 - t0)))
+            #     factor = cholesky(tsm)
+            #     f = fixdof * glv + modf
+            #     ue = factor(f)  # elastic solution
+
+            # print("ue: ",ue)
+            # end tangent stiffness matrix
+
+            # print("|f| after TSM: ", np.linalg.norm(f))
+            # print("|ue|: ", np.linalg.norm(ue))
+
+            fex_sum = 0.0
+            fey_sum = 0.0
+            fez_sum = 0.0
+            for node in range(len(nocoord)):
+                dof = 3 * node
+                fex_sum += f[dof]
+                fey_sum += f[dof + 1]
+                fez_sum += f[dof + 2]
+            # print("fex_sum (after TSM): ", fex_sum)
+            # print("fey_sum (after TSM): ", fey_sum)
+            # print("fez_sum (after TSM): ", fez_sum)
+            # print("ue_max (after TSM): ", np.max(ue))
+            # print("stiffness after TSM: ", fex_sum / np.max(ue))
 
             while error > error_max:
 
+                # print(">>>> ---------------- displacement correction -------------------")
+
                 iterat += 1
                 iterat_tot += 1
+
+                # relax = 0.9
 
                 f = relax * r
                 t0 = time.perf_counter()
@@ -952,31 +1214,71 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 elif settings["solver"] == 3:
                     due = sparse_cholesky.solve_A(f)
 
+                # print("|r|: ", np.linalg.norm(r))
+
                 t1 = time.perf_counter()
 
                 factor_time_tot += t1 - t0
 
+                # print("norm(due): ", np.linalg.norm(due))
+
                 # Riks control correction to load level increment
+
+                # print("dl before riks: ", dl)
+                # print("before riks lbd[step + 1]: ", lbd[step + 1])
+
                 if iRiks:
-                    dl = -np.dot(a, due) / np.dot(a, ue)
+                    teller = -np.dot(a, due)
+                    noemer = np.dot(a, ue)
+                    # print(">>>> lbd[step + 1]: ", lbd[step + 1])
+                    # print(">>>> teller: ", teller, "noemer: ", noemer)
+                    # print(">>>> teller/noemer: ", teller / noemer)
+                    # dl = -np.dot(a, due) / np.dot(a, ue)
+                    dl = teller / noemer
+                    # if error < 0.99 * error_old: dl = 0.0
                     lbd[step + 1] += dl
+                    # print(">>>> lbd[step + 1]: ", lbd[step + 1])
                 else:
                     dl = 0.0
 
+                # print("dl after riks: ", dl)
+                # print("lbd[step + 1]: ", lbd[step + 1])
                 # Riks control correction to displacement increment
                 du += due + dl * ue
+
+                # r_sum = 0.0
+                # for node in range(len(nocoord)):
+                #     dof = 3 * node
+                #     r_sum += f[dof]
+                # print("r_sum: ", r_sum)
+                # print("due_max: ", np.max(due))
+
+                # print("norm(du): ", np.linalg.norm(du))
 
                 # update stresses and loads
 
                 qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-                update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new, sig_test,
-                                   qin, Et_E)
+                # print(">>>> ---------------- update stresses and loads -------------------")
+
+                update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig_old, sig_new,
+                                   sig_test, qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat)
+
+                # print("norm(qin): ", np.linalg.norm(qin))
 
                 # calculate out of balance error
                 r = fixdof * (lbd[step + 1] * glv - qin)
                 rnorm = np.linalg.norm(r)
+                # qnorm = np.linalg.norm(fixdof * qin)
                 error = rnorm / qnorm
+
                 prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
+                # print(">>>> fex_norm: ", np.linalg.norm(fex))
+                # print(">>>> fex_min: ", np.min(fex))
+                # print(">>>> fex_max: ", np.max(fex))
+                # print(">>>> fin_norm: ", np.linalg.norm(fin))
+                # print(">>>> lbd[step+1]: ", lbd[step + 1])
+                # print(">>>> rnorm: ", rnorm)
+                # print(">>>> qnorm: ", qnorm)
 
                 if iterat > iterat_max:
                     # scale down
@@ -995,11 +1297,14 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     lbd[step + 1] = lbd[step] + dl
 
                     qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-                    update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new,
-                                       sig_test, qin, Et_E)
+                    update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig_old, sig_new,
+                                       sig_test, qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat)
+
                     r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
                     rnorm = np.linalg.norm(r)
+                    # qnorm = np.linalg.norm(fixdof * qin)
                     error = rnorm / qnorm
+
                     iterat = 0
 
             # if abs(lbd[step + 1]) > abs(target_LF) and iRiks:
@@ -1031,9 +1336,9 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
                 # un.append(np.max(np.abs(disp_new)))
                 un.append(disp_new[dof_max])
-                update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr,
-                                triax,
-                                pressure, sigmises, ecr, Et_E)
+                # update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr,
+                #                 triax,
+                #                 pressure, sigmises, ecr)
                 maxloc = np.argmax(csr)
                 csrplot.append(np.max(csr))
                 crip.append(maxloc)
@@ -1044,8 +1349,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 peeqplot.append(peeq[maxloc])
                 peeqmax.append(np.max(peeq))
 
-                PQ_u(str(round(max(peeq), 3)))
-                CR_u(str(round(max(csr), 3)))
+                EC_u(str(round(max(peeq), 3)))
+                ES_u(str(round(max(csr), 3)))
 
                 if not iRiks: break
 
@@ -1089,9 +1394,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         else:
             el_limit = 0
         csr_limit = np.argwhere(np.asarray(csrplot) > 1.0)
+        ultimate_strain = 1.0e6
         peeq_limit = np.argwhere(np.asarray(peeqmax) > ultimate_strain)
 
-        if fcVM_window.csrRbtn.isChecked():
+        if fcSC_window.eps_cRbtn.isChecked():
             if len(csr_limit) != 0:
                 ul_limit = csr_limit[0][0] - 1
             else:
@@ -1102,8 +1408,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             else:
                 ul_limit = 0
 
-        averaged = fcVM_window.averagedChk.isChecked()
-        cnt, dl, du, target_LF = plot(fcVM_window, averaged, el_limit, ul_limit, un, lout, csrplot, peeqmax, dl, du,
+        averaged = fcSC_window.averagedChk.isChecked()
+        cnt, dl, du, target_LF = plot(fcSC_window, averaged, el_limit, ul_limit, un, lout, csrplot, peeqmax, dl, du,
                                       target_LF,
                                       nstep, ue, ultimate_strain, disp_new, disp_old, elNodes, nocoord, sig_new, peeq,
                                       sigmises, csr, noce, sig_yield_inp)
@@ -1484,15 +1790,15 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
     callback.nstep = nstep
     fig, ax = plt.subplots(1, 2, figsize=(10, 6))
     ax[1].xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
-    fig.canvas.manager.set_window_title('fcVM')
+    fig.canvas.manager.set_window_title('fcSC')
     plt.subplots_adjust(bottom=0.2)
     ax[0].plot(un, lbd, '-ok')
     ax[0].set(xlabel='displacement [mm]', ylabel='load factor [-] or load [N]', title='')
-    if fcVM.csrRbtn.isChecked():
-        ax[1].set(xlabel='critical strain ratio [-]', title='')
+    if fcVM.eps_cRbtn.isChecked():
+        ax[1].set(xlabel='maximum concrete compressive strain [-]', title='')
         ax[1].plot(csrplot, lbd, '-ok')
     else:
-        ax[1].set(xlabel='equivalent plastic strain (PEEQ) [-]', title='')
+        ax[1].set(xlabel='maximum steel tensile strain [-]', title='')
         ax[1].plot(peeqmax, lbd, '-ok')
     ax[0].grid()
     ax[1].grid()
@@ -1561,13 +1867,11 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 # update PEEQ and CSR
 @jit(nopython=True, cache=True, fastmath=True)
 def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr, triax, pressure,
-                    sigmises, ecr, Et_E):
+                    sigmises, ecr):
     E = materialbyElement[0][0]  # Young's Modulus
     nu = materialbyElement[0][1]  # Poisson's Ratio
+    nu = 0.0  # for simplified concrete analysis
     G = E / 2.0 / (1 + nu)  # shear modulus
-    if Et_E > 0.95: Et_E = 0.95
-    Et = Et_E * E
-    H = Et / (1.0 - Et_E)
     if ultimate_strain == 0.0:
         ultimate_strain = 1.0e12
     alpha = np.sqrt(np.e) * ultimate_strain  # stress triaxiality T = 1/3 for uniaxial test
@@ -1596,7 +1900,6 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             if (sig_mises_test > sig_yield[ipos1]):
                 DL = (sig_mises_test - sig_yield[ipos1]) / (3.0 * G + H)
                 peeq[ipos1] += DL
-                sig_yield[ipos1] += Et * DL
 
             # if sig_mises_new > 0.0:
             #     T = p_n / sig_mises_new
@@ -1622,8 +1925,9 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
 # update stresses and loads
 
 @jit(nopython=True, cache=True, fastmath=True)
-def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig, sig_update, sig_test_global, qin,
-                       Et_E):
+def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig, sig_update,
+                       sig_test_global, qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat):
+    # print("-------------------------update_stress_load-------------------------")
     u10 = np.empty(30, dtype=np.float64)  # displacements for the 10 tetrahedral nodes
     sig_test = np.empty(6, dtype=np.float64)
     bm0 = np.empty(10, dtype=np.float64)
@@ -1635,7 +1939,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
     bm6 = np.empty(10, dtype=np.float64)
     bm7 = np.empty(10, dtype=np.float64)
     bm8 = np.empty(10, dtype=np.float64)
-    dmat = np.zeros((6, 6), dtype=np.float64)
     xlv0 = np.empty(10, dtype=np.float64)
     xlv1 = np.empty(10, dtype=np.float64)
     xlv2 = np.empty(10, dtype=np.float64)
@@ -1646,14 +1949,16 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
     dshpg1 = np.empty(10, dtype=np.float64)
     dshpg2 = np.empty(10, dtype=np.float64)
 
-    hooke(0, materialbyElement, dmat)  # local material stiffness matrix
+    dmat = hooke(0, materialbyElement, 0, np.array(3 * [1.0]), np.array(6 * [1.0]), rhox, rhoy, rhoz,
+                 210000.0)  # elastic material stiffness matrix
 
     E = materialbyElement[0][0]  # Young's Modulus
+    Es = 210000.0
     nu = materialbyElement[0][1]  # Poisson's Ratio
+    nu = 0.0  # for simplified concrete analysis
     G = E / 2.0 / (1 + nu)  # shear modulus
-    if Et_E > 0.95: Et_E = 0.95
-    Et = Et_E * E
-    H = Et / (1.0 - Et_E)
+
+    first = True
 
     for el, nodes in enumerate(elNodes):
         for i, nd in enumerate(nodes):
@@ -1663,6 +1968,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
             xlv2[i] = co[2]
             # xlv[i] = co
         elpos = 24 * el  # 4 integration points with 6 stress components each
+        elpos_s = 12 * el  # 4 integration points with 3 stress components each
         elv = np.zeros(30, dtype=np.float64)  # element load vector, 10 nodes with 3 load components each
 
         for index, nd in enumerate(nodes):
@@ -1676,6 +1982,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
             sy = sig_yield[4 * el + i]
             ip = gp10[i]
             ippos = elpos + 6 * i
+            # print("Gauss point: ", 4 * el + i)
 
             # ------------------------------------------------------------------------------------------------------------
             xi = ip[0]
@@ -1790,6 +2097,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
                 eps[4] += bm5[j] * u10[j3] + bm6[j] * u10[j3 + 2]
                 eps[5] += bm7[j] * u10[j3 + 1] + bm8[j] * u10[j3 + 2]
 
+            # print("eps: ", eps)
             # elastic test stress
             for j in range(6):
                 tmp = sig[ippos + j]
@@ -1797,10 +2105,32 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
                     tmp += dmat[j, k] * eps[k]
                 sig_test[j] = tmp
 
+            # print("sig_test_concrete: ", sig_test_concrete)
+
             sig_test_global[ippos:ippos + 6] = sig_test
-            # return elastic stress to von Mises yield surface
-            sxx, syy, szz, sxy, syz, szx = vmises_original_optimised(sig_test, sy, H, G)
+
+            prn = False
+
+            sxx, syy, szz, sxy, syz, szx, psdir, act_c, act_s = concrete(
+                sig_test, rhox, rhoy, rhoz, fcd, sy, nu, step, iterat, prn)
+
             sig_update[ippos:ippos + 6] = sxx, syy, szz, sxy, syz, szx
+
+            if act_c[0] == 1:
+                ev[ippos:ippos + 3] = psdir[:, 0]
+                if act_c[1] == 1:
+                    ev[ippos + 3:ippos + 6] = psdir[:, 1]
+                else:
+                    ev[ippos + 3:ippos + 6] = psdir[:, 2]
+            else:
+                if act_c[1] == 1:
+                    ev[ippos:ippos + 3] = psdir[:, 1]
+                    ev[ippos + 3:ippos + 6] = psdir[:, 2]
+                else:
+                    ev[ippos:ippos + 3] = psdir[:, 2]
+
+            a_c[4 * el + i] = np.sum(act_c)
+            a_s[12 * el + 3 * i:12 * el + 3 * i + 3] = act_s
 
             # calculate element load vectors
             ipxsj = ip[3] * abs(xsj)
@@ -1844,6 +2174,241 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
     st5 = fac * st5
 
     sig_update = st0, st1, st2, st3, st4, st5
+
+    return sig_update
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn):
+    ftd = 0.
+
+    a_c = np.array(3 * [0])
+    a_s = np.array(3 * [1.0])
+
+    ps1, ps2, ps3, psdir = calculate_principal_stress_ip(sig_test)
+
+    fy1 = (rhox * psdir[0, 0] ** 2 + rhoy * psdir[1, 0] ** 2 + rhoz * psdir[2, 0] ** 2) * sig_yield
+    fy2 = (rhox * psdir[0, 1] ** 2 + rhoy * psdir[1, 1] ** 2 + rhoz * psdir[2, 1] ** 2) * sig_yield
+    fy3 = (rhox * psdir[0, 2] ** 2 + rhoy * psdir[1, 2] ** 2 + rhoz * psdir[2, 2] ** 2) * sig_yield
+
+    psr1 = min(ftd + fy1, max(ps1, -fcd - fy1))
+    psr2 = min(ftd + fy2, max(ps2, -fcd - fy2))
+    psr3 = min(ftd + fy3, max(ps3, -fcd - fy3))
+
+    if psr1 != ps1: a_c[0] = 1
+    if psr2 != ps2: a_c[1] = 1
+    if psr3 != ps3: a_c[2] = 1
+
+    sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = cartesian(psr1, psr2, psr3, psdir)
+
+    return sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx, psdir, a_c, a_s
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def rankine_modified(ps1, ps2, ps3, nu, step, iterat):
+    rankine_elastic = True
+    psr = np.array(3 * [0.])
+    ps = np.array([ps1, ps2, ps3])
+
+    f1e = ps[0]
+    f2e = ps[1]
+    f3e = ps[2]
+
+    if max(ps) > 0.0:
+        psr[0] = 0.0
+        psr[1] = ps[1] - nu / (1.0 - nu) * ps[0]
+        psr[2] = ps[2] - nu / (1.0 - nu) * ps[0]
+        # if step == 11 and iterat == 0:
+        # print(">>>> REGULAR")
+        # print(">>>> psr: ", psr[0], psr[1], psr[2])
+
+        if psr[1] > 1.0e-6:
+            dl1 = ((1.0 - nu) * f1e - nu * f2e)
+            dl2 = (-nu * f1e + (1.0 - nu) * f2e)
+            psr[0] = ps[0] - (dl1 * (1.0 - nu) + dl2 * nu) / (1.0 - 2.0 * nu)
+            psr[1] = ps[1] - (dl1 * nu + dl2 * (1.0 - nu)) / (1.0 - 2.0 * nu)
+            psr[2] = ps[2] - (dl1 * nu + dl2 * nu) / (1.0 - 2.0 * nu)
+            # if step == 11 and iterat == 0:
+            # print(">>>> RIDGE12")
+            # print(">>>> psr: ", psr[0], psr[1], psr[2])
+
+        if psr[2] > 1.0e-6:
+            dl1 = ((1.0 - nu) * f1e - nu * f3e)
+            dl3 = (-nu * f1e + (1.0 - nu) * f3e)
+            psr[0] = ps[0] - (dl1 * (1.0 - nu) + dl3 * nu) / (1.0 - 2.0 * nu)
+            psr[1] = ps[1] - (dl1 * nu + dl3 * nu) / (1.0 - 2.0 * nu)
+            psr[2] = ps[2] - (dl1 * nu + dl3 * (1.0 - nu)) / (1.0 - 2.0 * nu)
+            # if step == 11 and iterat == 0:
+            # print(">>>> RIDGE23")
+            # print(">>>> psr: ", psr[0], psr[1], psr[2])
+
+        if psr[1] > 1.0e-6 or psr[2] > 1.0e-6:
+            # if step == 11 and iterat == 0: print(">>>> APEX")
+            psr[0] = 0.0
+            psr[1] = 0.0
+            psr[2] = 0.0
+
+        ps1 = psr[0]
+        ps2 = psr[1]
+        ps3 = psr[2]
+
+    if step == 0 and iterat == 0:
+        print("stresses at the end of rankine: ", ps1, ps2, ps3)
+    return ps1, ps2, ps3
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def rankine(ps1, ps2, ps3, ts1, ts2, ts3, nu, first):
+    rankine_elastic = True
+    psr = np.array(3 * [0.])
+    ps = np.array([ps1, ps2, ps3])
+    if first:
+        print(">>>> ps: ", ps, "ts: ", ts, "ps: ", ps)
+        # print("ts: ", ts)
+        # print("ps: ", ps)
+
+    if max(ps) > 0.0:
+        rankine_elastic = False
+        si = np.argsort(ps)[::-1]
+        psr[si[0]] = ps[si[0]] - ps[si[0]]
+        psr[si[1]] = ps[si[1]] - nu / (1.0 - nu) * ps[si[0]]
+        psr[si[2]] = ps[si[2]] - nu / (1.0 - nu) * ps[si[0]]
+        # print("si[0]: ", si[0])
+        # print("psr[si[0]]: ", psr[si[0]])
+        # print("psr[si[1]]: ", psr[si[1]])
+        # print("psr[si[2]]: ", psr[si[2]])
+
+        f2r = psr[si[1]] - ts[si[1]]
+        f3r = psr[si[2]] - ts[si[2]]
+
+        # print("f2r: ", f2r)
+        # print("f3r: ", f3r)
+
+        f1e = ps[si[0]] - ts[si[0]]
+        f2e = ps[si[1]] - ts[si[1]]
+        f3e = ps[si[2]] - ts[si[2]]
+
+        if first:
+            print(">>>> f2r: ", f2r)
+            print(">>>> f3r: ", f3r)
+
+        apex = (f2r > 0.0 and f3r > 0.0)  # test for apex
+
+        if apex:
+            ps1 = ts[si[0]]
+            ps2 = ts[si[1]]
+            ps3 = ts[si[2]]
+            if first: print(">>>> APEX")
+        else:
+            ridge12 = f2r > 0.0  # test for ps1 = ps2 ridge
+            ridge23 = f3r > 0.0  # test for ps2 = ps3 ridge
+
+            # print("ridge12: ", ridge12)
+            # print("ridge23: ", ridge23)
+
+            if ridge12:
+                if first: print("RIDGE12")
+                dl1 = ((1.0 - nu) * f1e - nu * f2e)
+                dl2 = (-nu * f1e + (1.0 - nu) * f2e)
+                ps1 = ps[si[0]] - (dl1 * (1.0 - nu) + dl2 * nu) / (1.0 - 2.0 * nu)
+                ps2 = ps[si[1]] - (dl1 * nu + dl2 * (1.0 - nu)) / (1.0 - 2.0 * nu)
+                ps3 = ps[si[2]] - (dl1 * nu + dl2 * nu) / (1.0 - 2.0 * nu)
+            elif ridge23:
+                if first: print("RIDGE23")
+                dl1 = ((1.0 - nu) * f1e - nu * f3e)
+                dl3 = (-nu * f1e + (1.0 - nu) * f3e)
+                ps1 = ps[si[0]] - (dl1 * (1.0 - nu) + dl3 * nu) / (1.0 - 2.0 * nu)
+                ps2 = ps[si[1]] - (dl1 * nu + dl3 * nu) / (1.0 - 2.0 * nu)
+                ps3 = ps[si[2]] - (dl1 * nu + dl3 * (1.0 - nu)) / (1.0 - 2.0 * nu)
+            else:
+                if first:
+                    print("REGULAR")
+                    print("si: ", si)
+
+                ps1 = psr[0]
+                ps2 = psr[1]
+                ps3 = psr[2]
+                # ps1 = psr[si[0]]
+                # ps2 = psr[si[1]]
+                # ps3 = psr[si[2]]
+
+    # print("stresses at the end of rankine: ", ps1, ps2, ps3)
+    return ps1, ps2, ps3
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def tresca(ps1, ps2, ps3, cf):
+    femc = (ps1 - ps3) - 2.0 * cf
+
+    if femc > 0.0:
+        ps1r = ps1 - femc / 2.0
+        ps2r = ps2
+        ps3r = ps3 + femc / 2.0
+
+        ridge12 = ps2r > 1.0000001 * ps1r  # test for ps1 = ps2 ridge
+        ridge23 = 1.0000001 * ps2r < ps3r  # test for ps2 = ps3 ridge
+
+        if ridge12:  # triaxial compression
+            ridge = 1
+            femctc = ((ps2 - ps3) - 2.0 * cf)
+            ps1 -= (2.0 * femc - femctc) / 3.0
+            ps2 -= (2.0 * femctc - femc) / 3.0
+            ps3 += (femc + femctc) / 3.0
+
+        elif ridge23:  # triaxial extension
+            ridge = 2
+            femcte = ((ps1 - ps2) - 2.0 * cf)
+            ps1 -= (femc + femcte) / 3.0
+            ps2 += (2.0 * femcte - femc) / 3.0
+            ps3 += (2.0 * femc - femcte) / 3.0
+
+        else:  # regular return
+            ridge = 0
+            ps1 = ps1r
+            ps2 = ps2r
+            ps3 = ps3r
+
+    return ps1, ps2, ps3
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def calculate_principal_stress_ip(stress_tensor):
+    s11 = stress_tensor[0]  # Sxx
+    s22 = stress_tensor[1]  # Syy
+    s33 = stress_tensor[2]  # Szz
+    s12 = stress_tensor[3]  # Sxy
+    s31 = stress_tensor[4]  # Szx
+    s23 = stress_tensor[5]  # Syz
+    sigma = np.array([
+        [s11, s12, s31],
+        [s12, s22, s23],
+        [s31, s23, s33]
+    ])
+
+    eigenvalues, eigenvectors = np.linalg.eigh(sigma)
+
+    eigenvalues = eigenvalues
+    eigenvectors = eigenvectors
+
+    idx = eigenvalues.argsort()[::-1]
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
+
+    return (eigenvalues[0], eigenvalues[1], eigenvalues[2], eigenvectors)
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def cartesian(ps1, ps2, ps3, psdir):
+    sig_update = np.zeros(6, dtype=types.float64)  # updated stresses
+    sig_update[0] = psdir[0, 0] ** 2 * ps1 + psdir[0, 1] ** 2 * ps2 + psdir[0, 2] ** 2 * ps3
+    sig_update[1] = psdir[1, 0] ** 2 * ps1 + psdir[1, 1] ** 2 * ps2 + psdir[1, 2] ** 2 * ps3
+    sig_update[2] = psdir[2, 0] ** 2 * ps1 + psdir[2, 1] ** 2 * ps2 + psdir[2, 2] ** 2 * ps3
+    sig_update[3] = psdir[0, 0] * psdir[1, 0] * ps1 + psdir[0, 1] * psdir[1, 1] * ps2 + psdir[0, 2] * \
+                    psdir[1, 2] * ps3
+    sig_update[4] = psdir[0, 0] * psdir[2, 0] * ps1 + psdir[0, 1] * psdir[2, 1] * ps2 + psdir[0, 2] * \
+                    psdir[2, 2] * ps3
+    sig_update[5] = psdir[1, 0] * psdir[2, 0] * ps1 + psdir[1, 1] * psdir[2, 1] * ps2 + psdir[1, 2] * \
+                    psdir[2, 2] * ps3
 
     return sig_update
 
@@ -2148,7 +2713,7 @@ def calculate_principal_stress(tet10stress):
 
         # print(sigma)
 
-        eigenvalues, eigenvectors = np.linalg.eig(sigma)
+        eigenvalues, eigenvectors = np.linalg.eigh(sigma)
 
         eigenvalues = eigenvalues.real
         eigenvectors = eigenvectors.real

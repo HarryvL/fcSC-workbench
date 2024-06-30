@@ -32,16 +32,16 @@ print("fcSC.FCMacro")
 
 mdir = os.path.dirname(dummySC.file_path())
 name = App.ActiveDocument.Label
-file_path = os.path.join(mdir, "control files", name + '.inp')
+file_path = os.path.join(mdir, "control files", name + '_sc.inp')
 macro_path = os.path.join(mdir, 'source code')
 
 global progress_update
 
-fcVM_window.progressBar.setValue(0)
-fcVM_window.Step.setText("0")
-fcVM_window.Load_Factor.setText("0.000")
-fcVM_window.PEEQ.setText("0.000")
-fcVM_window.CSR.setText("0.000")
+fcSC_window.progressBar.setValue(0)
+fcSC_window.Step.setText("0")
+fcSC_window.Load_Factor.setText("0.000")
+fcSC_window.eps_c.setText("0.000")
+fcSC_window.eps_s.setText("0.000")
 
 
 def prn_upd(*args):
@@ -64,10 +64,12 @@ t = 7 * [0.0]
 
 try:
     with open(file_path, encoding='utf8') as f:
+        fcd = float(f.readline().strip())
         sig_yield = float(f.readline().strip())
-        grav_x = float(f.readline().strip())
-        grav_y = float(f.readline().strip())
         grav_z = float(f.readline().strip())
+        rhox = float(f.readline().strip())
+        rhoy = float(f.readline().strip())
+        rhoz = float(f.readline().strip())
         nstep = int(f.readline().strip())
         iterat_max = int(f.readline().strip())
         error_max = float(f.readline().strip())
@@ -76,10 +78,8 @@ try:
         scale_up = float(f.readline().strip())
         scale_dn = float(f.readline().strip())
         disp_output = f.readline().strip()
-        ultimate_strain = float(f.readline().strip())
-        Et_E = float(f.readline().strip())
         target_LF = float(f.readline().strip())
-        csr_option = f.readline().strip()
+        eps_option = f.readline().strip()
         averaged_option = f.readline().strip()
 
 except:
@@ -105,7 +105,7 @@ if return_code == 0:
     prn_upd("prepare finite element input\n")
     t0 = time.time()
     (elNodes, noCoord, fix, fixdof, movdof, elMat, noce, loadFaces, pressure, loadvertices, vertexloads,
-     loadedges, edgeloads, loadfaces_uni, faceloads) = ft.setUpInput(doc, mesh, analysis)
+     loadedges, edgeloads, loadfaces_uni, faceloads, a_c, a_s, ev) = ft.setUpInput(doc, mesh, analysis)
 
     t1 = time.time()
     t[1] = t1 - t0
@@ -114,16 +114,11 @@ if return_code == 0:
     # calculate the global stiffness matrix and global load vector
     prn_upd("calculate the GSM and GLV\n")
     t0 = time.time()
-    stm, row, col, globalLoadVector, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x = ft.calcGSM(elNodes, noCoord,
-                                                                                                   elMat,
-                                                                                                   fix, grav_x, grav_y,
-                                                                                                   grav_z,
-                                                                                                   loadFaces, pressure,
-                                                                                                   loadvertices,
-                                                                                                   vertexloads,
-                                                                                                   loadedges, edgeloads,
-                                                                                                   loadfaces_uni,
-                                                                                                   faceloads)
+    print("enter calcGSM")
+    stm, row, col, globalLoadVector, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x = ft.calcGSM(
+        elNodes, noCoord, elMat, fix, grav_z, rhox, rhoy, rhoz, loadFaces, pressure, loadvertices,
+        vertexloads, loadedges,
+        edgeloads, loadfaces_uni, faceloads, a_c, a_s, ev)
 
     t1 = time.time()
     t[2] = t1 - t0
@@ -137,8 +132,8 @@ if return_code == 0:
     displacements, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
         elNodes, noCoord, fixdof, movdof, modf, elMat,
         stm, row, col, globalLoadVector, nstep, iterat_max,
-        error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-        ultimate_strain, fcVM_window, Et_E, target_LF, x, noce)
+        error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
+        fcSC_window, target_LF, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix)
 
     t1 = time.time()
     t[3] = t1 - t0
@@ -148,7 +143,7 @@ if return_code == 0:
         # map stresses to nodal points
         prn_upd("map stresses and strains to nodal points\n")
         t0 = time.time()
-        averaged = fcVM_window.averagedChk.isChecked()
+        averaged = fcSC_window.averagedChk.isChecked()
         tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses,
                                                                                 peeq, sigmises, csr, noce, sig_yield)
         t1 = time.time()
@@ -216,6 +211,6 @@ if return_code == 0:
 
     f.close()
 
-    fcVM_window.progressBar.setValue(0)
-    fcVM_window.Step.setText("0")
-    fcVM_window.Load_Factor.setText("0.000")
+    fcSC_window.progressBar.setValue(0)
+    fcSC_window.Step.setText("0")
+    fcSC_window.Load_Factor.setText("0.000")
