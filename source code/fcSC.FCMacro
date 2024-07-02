@@ -129,7 +129,7 @@ if return_code == 0:
     Gui.updateGui()
     t0 = time.time()
 
-    displacements, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
+    displacements, stresses, epsc_new, sigmises, epss_new, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, epscplot, epssplot, fail = ft.calcDisp(
         elNodes, noCoord, fixdof, movdof, modf, elMat,
         stm, row, col, globalLoadVector, nstep, iterat_max,
         error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
@@ -144,8 +144,8 @@ if return_code == 0:
         prn_upd("map stresses and strains to nodal points\n")
         t0 = time.time()
         averaged = fcSC_window.averagedChk.isChecked()
-        tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses,
-                                                                                peeq, sigmises, csr, noce, sig_yield)
+        tet10stress, tet10epss, tet10epsc, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses,
+                                                                                epsc_new, sigmises, epss_new, noce, sig_yield)
         t1 = time.time()
         t[4] = t1 - t0
 
@@ -154,7 +154,7 @@ if return_code == 0:
         # paste results in the FEM result object
         prn_upd("paste results in the FEM result object\n")
         t0 = time.time()
-        resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm)
+        resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epsc, tet10svm)
         t1 = time.time()
         t[5] = t1 - t0
         prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
@@ -163,7 +163,7 @@ if return_code == 0:
         prn_upd("export results to VTK\n")
         t0 = time.time()
         VTKfile = os.path.join(mdir, "output files", name + '.vtk')
-        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, sig_yield,
+        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epsc, tet10svm, tet10triax, sig_yield,
                      VTKfile)
         t1 = time.time()
         t[6] = t1 - t0
@@ -198,13 +198,13 @@ if return_code == 0:
             "{0: >8}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}{8: >10}{9: >10}{10: >10}{11: >10}\n".format(
                 "Gauss point", "x", "y", "z", "load",
                 "disp", "peeq", "pressure", "svmises",
-                "triax", "eps_cr", "csr_max"))
+                "triax", "eps_c", "eps_s"))
         for i in range(len(crip)):
             f.write(
                 '{0: 11d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}{8: >10.2e}{9: >10.2e}{10: >10.2e}{11: >10.2e}\n'.format(
                     crip[i], x[crip[i]][0], x[crip[i]][1], x[crip[i]][2], lout[i], un[i], peeqplot[i], pplot[i],
                     svmplot[i],
-                    triaxplot[i], ecrplot[i], csrplot[i]))
+                    triaxplot[i], epscplot[i], epssplot[i]))
 
         f.write(
             "\n=========================================================================================================================\n\n")

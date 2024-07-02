@@ -69,7 +69,7 @@ class _TaskPanel:
 
         ui_path = FreeCAD.getHomePath() + "Mod/Fem/Resources/ui/"
         self.result_widget = FreeCADGui.PySideUic.loadUi(
-            FreeCAD.getUserAppDataDir() + "Mod/fcVM-workbench/user_interface/ResultShow.ui")
+            FreeCAD.getUserAppDataDir() + "Mod/fcSC-workbench/user_interface/ResultShow.ui")
         self.info_widget = FreeCADGui.PySideUic.loadUi(ui_path + "ResultHints.ui")
         self.form = [self.result_widget, self.info_widget]
 
