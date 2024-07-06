@@ -6,12 +6,13 @@
 0.005
 10
 20
-1.0e-5
+1.0e-4
 1.2
 2.0
 1.2
 1.2
 incremental
-0.01
-eps_s
+2.0
+eps_c
 unaveraged
+1

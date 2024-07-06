@@ -122,6 +122,11 @@ class _TaskPanel:
             QtCore.SIGNAL("toggled(bool)"),
             self.max_prin_selected
         )
+        # QtCore.QObject.connect(
+        #     self.result_widget.rb_medprin,
+        #     QtCore.SIGNAL("toggled(bool)"),
+        #     self.med_prin_selected
+        # )
         QtCore.QObject.connect(
             self.result_widget.rb_minprin,
             QtCore.SIGNAL("toggled(bool)"),
@@ -219,6 +224,9 @@ class _TaskPanel:
             elif rt == "MaxPrin":
                 self.result_widget.rb_maxprin.setChecked(True)
                 self.max_prin_selected(True)
+            # elif rt == "MedPrin":
+            #     self.result_widget.rb_medprin.setChecked(True)
+            #     self.med_prin_selected(True)
             elif rt == "MinPrin":
                 self.result_widget.rb_minprin.setChecked(True)
                 self.min_prin_selected(True)
@@ -348,7 +356,7 @@ class _TaskPanel:
             self.result_selected(
                 "Sabs",
                 self.result_obj.vonMises,
-                "MPa",
+                "",
                 translate("FEM", "von Mises Stress")
             )
         else:
@@ -372,7 +380,7 @@ class _TaskPanel:
             self.result_selected(
                 "MaxPrin",
                 self.result_obj.PrincipalMax,
-                "MPa",
+                "",
                 translate("FEM", "Max Principal Stress")
             )
         else:
@@ -420,12 +428,24 @@ class _TaskPanel:
             self.result_selected(
                 "MinPrin",
                 self.result_obj.PrincipalMin,
-                "MPa",
+                "",
                 translate("FEM", "Min Principal Stress")
             )
         else:
             self.result_widget.rb_none.setChecked(True)
             self.none_selected(True)
+
+    # def med_prin_selected(self, state):
+        # if len(self.result_obj.PrincipalMed) > 0:
+        #     self.result_selected(
+        #         "MedPrin",
+        #         self.result_obj.PrincipalMed,
+        #         "",
+        #         translate("FEM", "Med Principal Stress")
+        #     )
+        # else:
+        #     self.result_widget.rb_none.setChecked(True)
+        #     self.none_selected(True)
 
     def peeq_selected(self, state):
         if len(self.result_obj.Peeq) > 0:

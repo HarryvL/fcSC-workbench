@@ -99,12 +99,13 @@ class fcSCWorkbench(Workbench):
 
         self.averaged_option = "unaveraged"
 
+        self.model_option = "1"
+
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
                 self.workbench_instance = workbench_instance
 
             def slotActivateDocument(self, doc):
-                print("slotActivateDocument")
                 if FreeCAD.activeDocument().Label[0:7] != "Unnamed":
                     # print(self.workbench_instance.file_name)
                     self.workbench_instance.save_clicked()
@@ -115,7 +116,6 @@ class fcSCWorkbench(Workbench):
                     fcSC_window.eps_s.setText("0.000")
 
             def slotFinishSaveDocument(self, doc, prop):
-                print("slotFinishSaveDocument")
                 self.workbench_instance.save_clicked()  # save under old file name
                 self.workbench_instance.file_name = doc.Label
                 self.workbench_instance.save_clicked()  # save under new file name
@@ -137,6 +137,8 @@ class fcSCWorkbench(Workbench):
         fcSC_window.eps_cRbtn.toggled.connect(self.btn_state)
         fcSC_window.eps_sRbtn.toggled.connect(self.btn_state)
         fcSC_window.averagedChk.toggled.connect(self.btn_state)
+        fcSC_window.model1.toggled.connect(self.btn_state)
+        fcSC_window.model2.toggled.connect(self.btn_state)
 
         fcSC_window.max_iter.textChanged.connect(self.max_iter_changed)
         fcSC_window.relax.textChanged.connect(self.relax_changed)
@@ -169,7 +171,7 @@ class fcSCWorkbench(Workbench):
         self.rho_z_default = "0.005"
         self.steps_default = "10"
         self.max_iter_default = "20"
-        self.error_default = "1.0e-3"
+        self.error_default = "1.0e-2"
         self.relax_default = "1.2"
         self.scale_1_default = "2.0"
         self.scale_2_default = "1.2"
@@ -177,6 +179,7 @@ class fcSCWorkbench(Workbench):
         self.target_LF_default = "2.0"
         self.disp_option_default = "incremental"
         self.eps_option_default = "eps_c"
+        self.model_option_default = "1"
         self.averaged_Chk_default = "unaveraged"
 
         self.open_file()
@@ -248,6 +251,7 @@ class fcSCWorkbench(Workbench):
             f.write(fcSC_window.target_LF.text() + "\n")
             f.write(self.eps_option + "\n")
             f.write(self.averaged_option + "\n")
+            f.write(self.model_option + "\n")
 
     def sum_clicked(self):
         fcSC_sum = open(self.sum_file_path).read()
@@ -291,6 +295,11 @@ class fcSCWorkbench(Workbench):
                     fcSC_window.averagedChk.setChecked(True)
                 else:
                     fcSC_window.averagedChk.setChecked(False)
+                mBtninp = str(f.readline().strip())
+                if mBtninp == "1":
+                    fcSC_window.model1.setChecked(True)
+                if mBtninp == "2":
+                    fcSC_window.model2.setChecked(True)
 
 
         except FileNotFoundError:
@@ -311,6 +320,7 @@ class fcSCWorkbench(Workbench):
             fcSC_window.target_LF.setText(self.target_LF_default)
             fcSC_window.eps_cRbtn.setChecked(True)
             fcSC_window.averagedChk.setChecked(False)
+            fcSC_window.model1.setChecked(True)
 
     def max_iter_changed(self):
         if (fcSC_window.max_iter.text() != self.max_iter_default):
@@ -415,6 +425,10 @@ class fcSCWorkbench(Workbench):
             self.eps_option = "eps_c"
         if fcSC_window.eps_sRbtn.isChecked():
             self.eps_option = "eps_s"
+        if fcSC_window.model1.isChecked():
+            self.model_option = "1"
+        if fcSC_window.model2.isChecked():
+            self.model_option = "2"
         if fcSC_window.averagedChk.isChecked():
             self.averaged_option = "averaged"
         else:

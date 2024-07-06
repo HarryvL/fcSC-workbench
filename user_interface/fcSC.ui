@@ -169,21 +169,14 @@
                   <item row="0" column="0">
                    <widget class="QLabel" name="label">
                     <property name="text">
-                     <string>fc_design</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="4">
-                   <widget class="QLabel" name="label_15">
-                    <property name="text">
-                     <string>(m/s2)</string>
+                     <string>fc_design   (MPa)</string>
                     </property>
                    </widget>
                   </item>
                   <item row="3" column="0">
                    <widget class="QLabel" name="label_14">
                     <property name="text">
-                     <string>g_z</string>
+                     <string>g_z              (m/s2)</string>
                     </property>
                    </widget>
                   </item>
@@ -219,14 +212,7 @@
                   <item row="1" column="0">
                    <widget class="QLabel" name="label_16">
                     <property name="text">
-                     <string>fy_design</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="4">
-                   <widget class="QLabel" name="label_17">
-                    <property name="text">
-                     <string>(MPa)</string>
+                     <string>fy_design   (MPa)</string>
                     </property>
                    </widget>
                   </item>
@@ -249,13 +235,6 @@
                     </property>
                     <property name="frame">
                      <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="4">
-                   <widget class="QLabel" name="label_3">
-                    <property name="text">
-                     <string>(MPa)</string>
                     </property>
                    </widget>
                   </item>
@@ -411,6 +390,34 @@
                      <string>0.005</string>
                     </property>
                    </widget>
+                  </item>
+                  <item row="0" column="4">
+                   <layout class="QHBoxLayout" name="horizontalLayout">
+                    <item>
+                     <widget class="QLabel" name="label_3">
+                      <property name="text">
+                       <string>Model</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QRadioButton" name="model1">
+                      <property name="text">
+                       <string>1</string>
+                      </property>
+                      <property name="checked">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QRadioButton" name="model2">
+                      <property name="text">
+                       <string>2</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
                   </item>
                  </layout>
                 </widget>
@@ -654,7 +661,7 @@
                      </size>
                     </property>
                     <property name="text">
-                     <string>1.0e-3</string>
+                     <string>1.0e-2</string>
                     </property>
                    </widget>
                   </item>

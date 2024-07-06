@@ -54,7 +54,7 @@
         <item row="1" column="1">
          <widget class="QRadioButton" name="rb_vm_stress">
           <property name="text">
-           <string>Mohr-Coulomb Stress</string>
+           <string>100 * Rho_x</string>
           </property>
          </widget>
         </item>
@@ -74,7 +74,7 @@
         <item row="2" column="1">
          <widget class="QRadioButton" name="rb_maxprin">
           <property name="text">
-           <string>Max Principal Stress</string>
+           <string>100 * Rho_y</string>
           </property>
          </widget>
         </item>
@@ -94,7 +94,7 @@
         <item row="3" column="1">
          <widget class="QRadioButton" name="rb_minprin">
           <property name="text">
-           <string>Min Principal Stress</string>
+           <string>100 * Rho_z</string>
           </property>
          </widget>
         </item>
