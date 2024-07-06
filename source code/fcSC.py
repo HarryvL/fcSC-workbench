@@ -2693,7 +2693,9 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10epss, tet10epscc,
         resVol.PrincipalMax = (100 * tet10rho[:, 1].T).tolist()
         resVol.PrincipalMin = (100 * tet10rho[:, 2]).T.tolist()
 
-    # print("max(tet10rho[:, 0]): ", max(tet10rho[:, 0]))
+    print("max(tet10rho[:, 0]): ", max(tet10rho[:, 0]))
+    print("max(tet10rho[:, 1]): ", max(tet10rho[:, 1]))
+    print("max(tet10rho[:, 2]): ", max(tet10rho[:, 2]))
 
     resVol.Stats = [min(dis[0::3]), max(dis[0::3]),
                     min(dis[1::3]), max(dis[1::3]),
