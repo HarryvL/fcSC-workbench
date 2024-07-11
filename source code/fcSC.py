@@ -275,20 +275,29 @@ def setUpInput(doc, mesh, analysis):
             F = obj.Force
             d = obj.DirectionVector
             for part, boundaries in obj.References:
+                N = 0
+                L = 0.0
+                A = 0.0
+                for boundary in boundaries:
+                    ref = part.Shape.getElement(boundary)
+                    if type(ref) == Part.Vertex: N+=1
+                    elif type(ref) == Part.Edge: L+=ref.Length
+                    else: A+=ref.Area
+                # print("N: ", N)
+                # print("L: ", L)
+                # print("A: ", A)
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
-                        dp = [F * d.x, F * d.y, F * d.z]
+                        dp = [F * d.x / N, F * d.y / N, F * d.z / N]
                         lf_vertex.append(list(mesh.getNodesByVertex(ref)))
                         pr_vertex.append(dp)
                     elif type(ref) == Part.Edge:
-                        L = ref.Length
                         dl = [F * d.x / L, F * d.y / L, F * d.z / L]
                         for edgeID in mesh.getEdgesByEdge(ref):
                             lf_edge.append(list(mesh.getElementNodes(edgeID)))
                             pr_edge.append(dl)
                     elif type(ref) == Part.Face:
-                        A = ref.Area
                         dp = [F * d.x / A, F * d.y / A, F * d.z / A]
                         for faceID in mesh.getFacesByFace(ref):
                             lf_face.append(list(mesh.getElementNodes(faceID)))
@@ -2693,9 +2702,9 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10epss, tet10epscc,
         resVol.PrincipalMax = (100 * tet10rho[:, 1].T).tolist()
         resVol.PrincipalMin = (100 * tet10rho[:, 2]).T.tolist()
 
-    print("max(tet10rho[:, 0]): ", max(tet10rho[:, 0]))
-    print("max(tet10rho[:, 1]): ", max(tet10rho[:, 1]))
-    print("max(tet10rho[:, 2]): ", max(tet10rho[:, 2]))
+    # print("max(tet10rho[:, 0]): ", max(tet10rho[:, 0]))
+    # print("max(tet10rho[:, 1]): ", max(tet10rho[:, 1]))
+    # print("max(tet10rho[:, 2]): ", max(tet10rho[:, 2]))
 
     resVol.Stats = [min(dis[0::3]), max(dis[0::3]),
                     min(dis[1::3]), max(dis[1::3]),
