@@ -134,17 +134,15 @@ class fcSCWorkbench(Workbench):
         fcSC_window.sumBtn.clicked.connect(self.sum_clicked)
         fcSC_window.totalRbtn.toggled.connect(self.btn_state)
         fcSC_window.incrRbtn.toggled.connect(self.btn_state)
-        fcSC_window.eps_cRbtn.toggled.connect(self.btn_state)
-        fcSC_window.eps_sRbtn.toggled.connect(self.btn_state)
         fcSC_window.averagedChk.toggled.connect(self.btn_state)
         fcSC_window.model1.toggled.connect(self.btn_state)
         fcSC_window.model2.toggled.connect(self.btn_state)
 
         fcSC_window.max_iter.textChanged.connect(self.max_iter_changed)
         fcSC_window.relax.textChanged.connect(self.relax_changed)
-        fcSC_window.scale_1.textChanged.connect(self.scale_1_changed)
-        fcSC_window.scale_2.textChanged.connect(self.scale_2_changed)
-        fcSC_window.scale_3.textChanged.connect(self.scale_3_changed)
+        # fcSC_window.scale_1.textChanged.connect(self.scale_1_changed)
+        # fcSC_window.scale_2.textChanged.connect(self.scale_2_changed)
+        # fcSC_window.scale_3.textChanged.connect(self.scale_3_changed)
         fcSC_window.rho_x.textChanged.connect(self.rho_x_changed)
         fcSC_window.rho_y.textChanged.connect(self.rho_y_changed)
         fcSC_window.rho_z.textChanged.connect(self.rho_z_changed)
@@ -158,10 +156,11 @@ class fcSCWorkbench(Workbench):
         fcSC_window.max_iter.setValidator(int_validator)
         fcSC_window.error.setValidator(double_validator)
         fcSC_window.relax.setValidator(double_validator)
-        fcSC_window.scale_1.setValidator(double_validator)
-        fcSC_window.scale_2.setValidator(double_validator)
-        fcSC_window.scale_3.setValidator(double_validator)
-        fcSC_window.target_LF.setValidator(double_validator)
+        # fcSC_window.scale_1.setValidator(double_validator)
+        # fcSC_window.scale_2.setValidator(double_validator)
+        # fcSC_window.scale_3.setValidator(double_validator)
+        fcSC_window.target_LF_V.setValidator(double_validator)
+        fcSC_window.target_LF_P.setValidator(double_validator)
 
         self.fc_default = "23.67"
         self.fy_default = "348.0"
@@ -176,7 +175,8 @@ class fcSCWorkbench(Workbench):
         self.scale_1_default = "2.0"
         self.scale_2_default = "1.2"
         self.scale_3_default = "1.2"
-        self.target_LF_default = "2.0"
+        self.target_LF_V_default = "2.0"
+        self.target_LF_P_default = "1.0"
         self.disp_option_default = "incremental"
         self.eps_option_default = "eps_c"
         self.model_option_default = "1"
@@ -221,13 +221,13 @@ class fcSCWorkbench(Workbench):
         fcSC_window.max_iter.setText(self.max_iter_default)
         fcSC_window.error.setText(self.error_default)
         fcSC_window.relax.setText(self.relax_default)
-        fcSC_window.scale_1.setText(self.scale_1_default)
-        fcSC_window.scale_2.setText(self.scale_2_default)
-        fcSC_window.scale_3.setText(self.scale_3_default)
-        fcSC_window.relax.setPalette(self.palette_standard)
-        fcSC_window.scale_1.setPalette(self.palette_standard)
-        fcSC_window.scale_2.setPalette(self.palette_standard)
-        fcSC_window.scale_3.setPalette(self.palette_standard)
+        # fcSC_window.scale_1.setText(self.scale_1_default)
+        # fcSC_window.scale_2.setText(self.scale_2_default)
+        # fcSC_window.scale_3.setText(self.scale_3_default)
+        # fcSC_window.relax.setPalette(self.palette_standard)
+        # fcSC_window.scale_1.setPalette(self.palette_standard)
+        # fcSC_window.scale_2.setPalette(self.palette_standard)
+        # fcSC_window.scale_3.setPalette(self.palette_standard)
         fcSC_window.incrRbtn.setChecked(True)
         fcSC_window.averagedChk.setChecked(False)
 
@@ -244,14 +244,16 @@ class fcSCWorkbench(Workbench):
             f.write(fcSC_window.max_iter.text() + "\n")
             f.write(fcSC_window.error.text() + "\n")
             f.write(fcSC_window.relax.text() + "\n")
-            f.write(fcSC_window.scale_1.text() + "\n")
-            f.write(fcSC_window.scale_2.text() + "\n")
-            f.write(fcSC_window.scale_3.text() + "\n")
+            f.write(self.scale_1_default + "\n")
+            f.write(self.scale_2_default + "\n")
+            f.write(self.scale_3_default + "\n")
             f.write(self.disp_option + "\n")
-            f.write(fcSC_window.target_LF.text() + "\n")
+            f.write(fcSC_window.target_LF_V.text() + "\n")
             f.write(self.eps_option + "\n")
             f.write(self.averaged_option + "\n")
             f.write(self.model_option + "\n")
+            f.write(fcSC_window.target_LF_P.text() + "\n")
+
 
     def sum_clicked(self):
         fcSC_sum = open(self.sum_file_path).read()
@@ -261,6 +263,8 @@ class fcSCWorkbench(Workbench):
 
     def open_file(self):
         inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '_sc.inp')
+        # print("open_file")
+
         try:
             with open(inp_file_path, "r") as f:
                 fcSC_window.fc.setText(str(f.readline().strip()))
@@ -273,33 +277,31 @@ class fcSCWorkbench(Workbench):
                 fcSC_window.max_iter.setText(str(f.readline().strip()))
                 fcSC_window.error.setText(str(f.readline().strip()))
                 fcSC_window.relax.setText(str(f.readline().strip()))
-                fcSC_window.scale_1.setText(str(f.readline().strip()))
-                fcSC_window.scale_2.setText(str(f.readline().strip()))
-                fcSC_window.scale_3.setText(str(f.readline().strip()))
+                dummy = str(f.readline().strip())
+                dummy = str(f.readline().strip())
+                dummy = str(f.readline().strip())
                 if str(f.readline().strip()) == "total":
                     fcSC_window.totalRbtn.setChecked(True)
                 else:
                     fcSC_window.incrRbtn.setChecked(True)
-                LFinp = str(f.readline().strip())
-                if LFinp == "":
-                    fcSC_window.target_LF.setText(self.target_LF_default)
+                LFinp_V = str(f.readline().strip())
+                if LFinp_V == "":
+                    fcSC_window.target_LF_V.setText(self.target_LF_V_default)
                 else:
-                    fcSC_window.target_LF.setText(LFinp)
+                    fcSC_window.target_LF_V.setText(LFinp_V)
                 epsBtninp = f.readline().strip()
-                if epsBtninp == "eps_c":
-                    fcSC_window.eps_cRbtn.setChecked(True)
-                else:
-                    fcSC_window.eps_sRbtn.setChecked(True)
                 avBtninp = str(f.readline().strip())
-                if avBtninp == "averaged":
-                    fcSC_window.averagedChk.setChecked(True)
-                else:
-                    fcSC_window.averagedChk.setChecked(False)
                 mBtninp = str(f.readline().strip())
                 if mBtninp == "1":
                     fcSC_window.model1.setChecked(True)
                 if mBtninp == "2":
                     fcSC_window.model2.setChecked(True)
+                LFinp_P = str(f.readline().strip())
+                if LFinp_P == "":
+                    fcSC_window.target_LF_P.setText(self.target_LF_P_default)
+                else:
+                    fcSC_window.target_LF_P.setText(LFinp_P)
+
 
 
         except FileNotFoundError:
@@ -313,14 +315,14 @@ class fcSCWorkbench(Workbench):
             fcSC_window.max_iter.setText(self.max_iter_default)
             fcSC_window.error.setText(self.error_default)
             fcSC_window.relax.setText(self.relax_default)
-            fcSC_window.scale_1.setText(self.scale_1_default)
-            fcSC_window.scale_2.setText(self.scale_2_default)
-            fcSC_window.scale_3.setText(self.scale_3_default)
+            # fcSC_window.scale_1.setText(self.scale_1_default)
+            # fcSC_window.scale_2.setText(self.scale_2_default)
+            # fcSC_window.scale_3.setText(self.scale_3_default)
             fcSC_window.incrRbtn.setChecked(True)
-            fcSC_window.target_LF.setText(self.target_LF_default)
-            fcSC_window.eps_cRbtn.setChecked(True)
+            fcSC_window.target_LF_V.setText(self.target_LF_V_default)
             fcSC_window.averagedChk.setChecked(False)
             fcSC_window.model1.setChecked(True)
+            fcSC_window.target_LF_P.setText(self.target_LF_P_default)
 
     def max_iter_changed(self):
         if (fcSC_window.max_iter.text() != self.max_iter_default):
@@ -340,41 +342,41 @@ class fcSCWorkbench(Workbench):
         else:
             fcSC_window.relax.setPalette(self.palette_standard)
 
-    def scale_1_changed(self):
-        if (fcSC_window.scale_1.text() != self.scale_1_default):
-            if fcSC_window.scale_1.text() == "":
-                fcSC_window.scale_1.setText("0.0")
-            if float(fcSC_window.scale_1.text()) > 3.0:
-                fcSC_window.scale_1.setText("3.0")
-            elif float(fcSC_window.scale_1.text()) < 1.0:
-                fcSC_window.scale_1.setText("1.0")
-            fcSC_window.scale_1.setPalette(self.palette_warning)
-        else:
-            fcSC_window.scale_1.setPalette(self.palette_standard)
-
-    def scale_2_changed(self):
-        if (fcSC_window.scale_2.text() != self.scale_2_default):
-            if fcSC_window.scale_2.text() == "":
-                fcSC_window.scale_2.setText("0.0")
-            if float(fcSC_window.scale_2.text()) > 2.0:
-                fcSC_window.scale_2.setText("2.0")
-            elif float(fcSC_window.scale_2.text()) < 1.0:
-                fcSC_window.scale_2.setText("1.0")
-            fcSC_window.scale_2.setPalette(self.palette_warning)
-        else:
-            fcSC_window.scale_2.setPalette(self.palette_standard)
-
-    def scale_3_changed(self):
-        if fcSC_window.scale_3.text() == "":
-            fcSC_window.scale_3.setText("0.0")
-        if (fcSC_window.scale_3.text() != self.scale_3_default):
-            if float(fcSC_window.scale_3.text()) > 2.0:
-                fcSC_window.scale_3.setText("2.0")
-            elif float(fcSC_window.scale_3.text()) < 1.0:
-                fcSC_window.scale_3.setText("1.0")
-            fcSC_window.scale_3.setPalette(self.palette_warning)
-        else:
-            fcSC_window.scale_3.setPalette(self.palette_standard)
+    # def scale_1_changed(self):
+    #     if (fcSC_window.scale_1.text() != self.scale_1_default):
+    #         if fcSC_window.scale_1.text() == "":
+    #             fcSC_window.scale_1.setText("0.0")
+    #         if float(fcSC_window.scale_1.text()) > 3.0:
+    #             fcSC_window.scale_1.setText("3.0")
+    #         elif float(fcSC_window.scale_1.text()) < 1.0:
+    #             fcSC_window.scale_1.setText("1.0")
+    #         fcSC_window.scale_1.setPalette(self.palette_warning)
+    #     else:
+    #         fcSC_window.scale_1.setPalette(self.palette_standard)
+    #
+    # def scale_2_changed(self):
+    #     if (fcSC_window.scale_2.text() != self.scale_2_default):
+    #         if fcSC_window.scale_2.text() == "":
+    #             fcSC_window.scale_2.setText("0.0")
+    #         if float(fcSC_window.scale_2.text()) > 2.0:
+    #             fcSC_window.scale_2.setText("2.0")
+    #         elif float(fcSC_window.scale_2.text()) < 1.0:
+    #             fcSC_window.scale_2.setText("1.0")
+    #         fcSC_window.scale_2.setPalette(self.palette_warning)
+    #     else:
+    #         fcSC_window.scale_2.setPalette(self.palette_standard)
+    #
+    # def scale_3_changed(self):
+    #     if fcSC_window.scale_3.text() == "":
+    #         fcSC_window.scale_3.setText("0.0")
+    #     if (fcSC_window.scale_3.text() != self.scale_3_default):
+    #         if float(fcSC_window.scale_3.text()) > 2.0:
+    #             fcSC_window.scale_3.setText("2.0")
+    #         elif float(fcSC_window.scale_3.text()) < 1.0:
+    #             fcSC_window.scale_3.setText("1.0")
+    #         fcSC_window.scale_3.setPalette(self.palette_warning)
+    #     else:
+    #         fcSC_window.scale_3.setPalette(self.palette_standard)
 
     def rho_x_changed(self):
         try:
@@ -421,10 +423,6 @@ class fcSCWorkbench(Workbench):
             self.disp_option = "total"
         if fcSC_window.incrRbtn.isChecked():
             self.disp_option = "incremental"
-        if fcSC_window.eps_cRbtn.isChecked():
-            self.eps_option = "eps_c"
-        if fcSC_window.eps_sRbtn.isChecked():
-            self.eps_option = "eps_s"
         if fcSC_window.model1.isChecked():
             self.model_option = "1"
         if fcSC_window.model2.isChecked():

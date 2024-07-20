@@ -78,10 +78,11 @@ try:
         scale_up = float(f.readline().strip())
         scale_dn = float(f.readline().strip())
         disp_output = f.readline().strip()
-        target_LF = float(f.readline().strip())
+        target_LF_V = float(f.readline().strip())
         eps_option = f.readline().strip()
         averaged_option = f.readline().strip()
         model = int(f.readline().strip())
+        target_LF_P = float(f.readline().strip())
 
 except:
     print("file not found")
@@ -106,7 +107,8 @@ if return_code == 0:
     prn_upd("prepare finite element input\n")
     t0 = time.time()
     (elNodes, noCoord, fix, fixdof, movdof, elMat, noce, loadFaces, pressure, loadvertices, vertexloads,
-     loadedges, edgeloads, loadfaces_uni, faceloads, a_c, a_s, ev) = ft.setUpInput(doc, mesh, analysis)
+     loadedges, edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s,
+     ev) = ft.setUpInput(doc, mesh, analysis)
 
     t1 = time.time()
     t[1] = t1 - t0
@@ -115,10 +117,10 @@ if return_code == 0:
     # calculate the global stiffness matrix and global load vector
     prn_upd("calculate the GSM and GLV\n")
     t0 = time.time()
-    stm, row, col, globalLoadVector, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x = ft.calcGSM(
+    stm, row, col, glv_V, glv_P, modf, V, loadsumx_p, loadsumy_p, loadsumz_p, loadsumx_v, loadsumy_v, loadsumz_v, ne, nn, x = ft.calcGSM(
         elNodes, noCoord, elMat, fix, grav_z, rhox, rhoy, rhoz, loadFaces, pressure, loadvertices,
         vertexloads, loadedges,
-        edgeloads, loadfaces_uni, faceloads, a_c, a_s, ev, model)
+        edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev, model)
 
     t1 = time.time()
     t[2] = t1 - t0
@@ -129,11 +131,11 @@ if return_code == 0:
     Gui.updateGui()
     t0 = time.time()
 
-    displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lout, un, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pdfcd = ft.calcDisp(
+    displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pdfcd = ft.calcDisp(
         elNodes, noCoord, fixdof, movdof, modf, elMat,
-        stm, row, col, globalLoadVector, nstep, iterat_max,
+        stm, row, col, glv_V, glv_P, nstep, iterat_max,
         error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
-        fcSC_window, target_LF, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix, model)
+        fcSC_window, target_LF_V, target_LF_P, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix, model)
 
     t1 = time.time()
     t[3] = t1 - t0
@@ -192,19 +194,23 @@ if return_code == 0:
         f.write("No. of Degrees of freedom:{0: >15}\n".format(nn))
         f.write(
             "\n=========================================================================================================================\n\n")
-        f.write("Sum of loads x-direction: {0: >15.2e}\n".format(loadsumx))
-        f.write("Sum of loads y-direction: {0: >15.2e}\n".format(loadsumy))
-        f.write("Sum of loads z-direction: {0: >15.2e}\n".format(loadsumz))
+        f.write("Sum of permanent loads\n")
+        f.write("x-direction: {0: >15.2e}\n".format(loadsumx_p))
+        f.write("y-direction: {0: >15.2e}\n".format(loadsumy_p))
+        f.write("z-direction: {0: >15.2e}\n\n".format(loadsumz_p))
+        f.write("Sum of variable loads\n")
+        f.write("x-direction: {0: >15.2e}\n".format(loadsumx_v))
+        f.write("y-direction: {0: >15.2e}\n".format(loadsumy_v))
+        f.write("z-direction: {0: >15.2e}\n".format(loadsumz_v))
         f.write(
             "\n=========================================================================================================================\n\n")
         f.write(
-            "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}\n".format(
-                "load",
-                "disp", "p/fcd", "eps_cc", "eps_ct", "eps_s"))
-        for i in range(len(lout)):
+            "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}\n".format(
+                "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "eps_ct", "eps_s"))
+        for i in range(len(lbdp)):
             f.write(
-                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}\n'.format(
-                    lout[i], un[i], pdfcdplot[i], epsccplot[i], epsctplot[i], epssplot[i]))
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}\n'.format(
+                    lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], epsctplot[i], epssplot[i]))
 
         f.write(
             "\n=========================================================================================================================\n\n")

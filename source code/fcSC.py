@@ -44,9 +44,9 @@ from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
-from matplotlib.widgets import Button, TextBox
 from matplotlib.ticker import FormatStrFormatter
 from femtaskpanels import task_result_mechanical as trm
+from matplotlib.widgets import Button, TextBox, RadioButtons
 
 global mdir
 mdir = os.path.dirname(dummySC.file_path())
@@ -250,15 +250,23 @@ def setUpInput(doc, mesh, analysis):
 
     lf = [[0, 0, 0, 0, 0, 0]]  # load face nodes - signature for numba
     pr = [0.0]  # load face pressure - signature for numba
+    tp = [True]  # load face type True = Permanent, False = Variable
     lf_vertex = [[0]]
     pr_vertex = [[0.0, 0.0, 0.0]]
+    tp_vertex = [True]  # True = Permanent, False = Variable
     lf_edge = [[0, 0, 0]]
     pr_edge = [[0.0, 0.0, 0.0]]
+    tp_edge = [True]  # True = Permanent, False = Variable
     lf_face = [[0, 0, 0, 0, 0, 0]]
     pr_face = [[0.0, 0.0, 0.0]]
+    tp_face = [True]  # True = Permanent, False = Variable
 
     for obj in App.ActiveDocument.Objects:
         if obj.isDerivedFrom('Fem::ConstraintPressure'):
+            if "(p)" in obj.Label or "(P)" in obj.Label:
+                perm = True
+            else:
+                perm = False
             if obj.Reversed:
                 sign = 1
             else:
@@ -271,10 +279,15 @@ def setUpInput(doc, mesh, analysis):
                             face_nodes = list(mesh.FemMesh.getElementNodes(faceID))  # 6-node element node numbers
                             lf.append(face_nodes)
                             pr.append(sign * obj.Pressure)
+                            tp.append(perm)
                     else:
                         prn_upd("No Faces with Pressure Loads")
 
         if obj.isDerivedFrom('Fem::ConstraintForce'):
+            if "(p)" in obj.Label or "(P)" in obj.Label:
+                perm = True
+            else:
+                perm = False
             F = obj.Force
             d = obj.DirectionVector
             for part, boundaries in obj.References:
@@ -283,39 +296,46 @@ def setUpInput(doc, mesh, analysis):
                 A = 0.0
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
-                    if type(ref) == Part.Vertex: N+=1
-                    elif type(ref) == Part.Edge: L+=ref.Length
-                    else: A+=ref.Area
-                # print("N: ", N)
-                # print("L: ", L)
-                # print("A: ", A)
+                    if type(ref) == Part.Vertex:
+                        N += 1
+                    elif type(ref) == Part.Edge:
+                        L += ref.Length
+                    else:
+                        A += ref.Area
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
                         dp = [F * d.x / N, F * d.y / N, F * d.z / N]
                         lf_vertex.append(list(mesh.FemMesh.getNodesByVertex(ref)))
                         pr_vertex.append(dp)
+                        tp_vertex(perm)
                     elif type(ref) == Part.Edge:
-                        dl = [F * d.x / L, F * d.y / L, F * d.z / L]
+                        dp = [F * d.x / L, F * d.y / L, F * d.z / L]
                         for edgeID in mesh.FemMesh.getEdgesByEdge(ref):
                             lf_edge.append(list(mesh.FemMesh.getElementNodes(edgeID)))
-                            pr_edge.append(dl)
+                            pr_edge.append(dp)
+                            tp_edge.append(perm)
                     elif type(ref) == Part.Face:
                         dp = [F * d.x / A, F * d.y / A, F * d.z / A]
                         for faceID in mesh.FemMesh.getFacesByFace(ref):
                             lf_face.append(list(mesh.FemMesh.getElementNodes(faceID)))
                             pr_face.append(dp)
+                            tp_face.append(perm)
                     else:
                         prn_upd("No Boundaries Found")
 
     loadfaces = np.array(lf)
     pressure = np.array(pr)
+    ploadtype = np.array(tp)
     loadvertices = np.array(lf_vertex)
     vertexloads = np.array(pr_vertex)
+    vloadtype = np.array(tp_vertex)
     loadedges = np.array(lf_edge)
     edgeloads = np.array(pr_edge)
+    eloadtype = np.array(tp_edge)
     loadfaces_uni = np.array(lf_face)
     faceloads = np.array(pr_face)
+    floadtype = np.array(tp_face)
 
     # re-order element nodes
     for el in elNodes:
@@ -331,7 +351,7 @@ def setUpInput(doc, mesh, analysis):
             loadfaces, pressure,
             loadvertices, vertexloads,
             loadedges, edgeloads,
-            loadfaces_uni, faceloads, a_c, a_s, ev)
+            loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev)
 
 
 # shape functions for a 4-node tetrahedron - only used for stress interpolation
@@ -669,7 +689,8 @@ def gaussPoints():
 #     nopython=True, cache=True)
 @jit(nopython=True, cache=True)
 def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, loadfaces, pressure,
-            loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, a_c, a_s, ev, model):
+            loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype,
+            floadtype, a_c, a_s, ev, model):
     gp10, gp6, gp2 = gaussPoints()
     ne = len(elNodes)  # number of volume elements
     # nn = len(nocoord[:, 0])  # number of degrees of freedom
@@ -684,7 +705,8 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
     xle = np.zeros((3, 3), dtype=types.float64)  # coordinates of load line nodes
     xlf = np.zeros((3, 6), dtype=types.float64)  # coordinates of load face nodes
     xlv = np.zeros((10, 3), dtype=types.float64)  # coordinates of volume element nodes
-    glv = np.zeros((3 * nn), dtype=types.float64)  # global load vector
+    glv_V = np.zeros((3 * nn), dtype=types.float64)  # global load vector
+    glv_P = np.zeros((3 * nn), dtype=types.float64)  # global load vector
     row = np.zeros(ns, dtype=types.int64)  # row indices of COO matrix
     col = np.zeros(ns, dtype=types.int64)  # column indices of COO matrix
     stm = np.zeros(ns, dtype=types.float64)  # stiffness values of COO matrix
@@ -717,7 +739,10 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
                 iglob3 = 3 * iglob
                 for k in range(3):
                     load = shp[nl] * pressure[face + 1] * xp[k] * abs(xsj) * gp6[index][2]
-                    glv[iglob3 + k] += load
+                    if ploadtype[face + 1]:
+                        glv_P[iglob3 + k] += load
+                    else:
+                        glv_V[iglob3 + k] += load
                 nl += 1
 
     for vertex in range(len(loadvertices) - 1):  # first vertex is a dummy signature for numba
@@ -727,7 +752,10 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
         nd = loadvertices[vertex + 1][0]
         iglob = nd - 1
         iglob3 = 3 * iglob
-        glv[iglob3:iglob3 + 3] += vertexloads[vertex + 1]
+        if vloadtype[vertex + 1]:
+            glv_P[iglob3:iglob3 + 3] += vertexloads[vertex + 1]
+        else:
+            glv_V[iglob3:iglob3 + 3] += vertexloads[vertex + 1]
 
     for face in range(len(loadfaces_uni) - 1):  # first face is a dummy signature for numba
         if len(loadfaces_uni) == 1:
@@ -750,7 +778,10 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
                 iglob = nd - 1
                 iglob3 = 3 * iglob
                 load = shp[nl] * faceloads[face + 1] * abs(xsj) * gp6[index][2]
-                glv[iglob3:iglob3 + 3] += load
+                if floadtype[face + 1]:
+                    glv_P[iglob3:iglob3 + 3] += load
+                else:
+                    glv_V[iglob3:iglob3 + 3] += load
                 nl += 1
 
     for edge in range(len(loadedges) - 1):  # first edge is a dummy signature for numba
@@ -772,7 +803,10 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
                 iglob = nd - 1
                 iglob3 = 3 * iglob
                 load = shp[nl] * edgeloads[edge + 1] * abs(xsj) * gp2[index][1]
-                glv[iglob3:iglob3 + 3] += load
+                if eloadtype[edge + 1]:
+                    glv_P[iglob3:iglob3 + 3] += load
+                else:
+                    glv_V[iglob3:iglob3 + 3] += load
                 nl += 1
 
     # for each volume element calculate the element stiffness matrix
@@ -829,9 +863,9 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
 
         for i in range(10):
             nd = nodes[i] - 1
-            glv[3 * nd] += gamma[3 * i]
-            glv[3 * nd + 1] += gamma[3 * i + 1]
-            glv[3 * nd + 2] += gamma[3 * i + 2]
+            glv_P[3 * nd] += gamma[3 * i]
+            glv_P[3 * nd + 1] += gamma[3 * i + 1]
+            glv_P[3 * nd + 2] += gamma[3 * i + 2]
             for j in range(3):
                 dof[3 * i + j] = 3 * nd + j
 
@@ -866,19 +900,30 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
     col_r = col[:pos]
     stm_r = stm[:pos]
 
-    loadsumx = 0.0
-    loadsumy = 0.0
-    loadsumz = 0.0
+    loadsumx_p = 0.0
+    loadsumy_p = 0.0
+    loadsumz_p = 0.0
+    loadsumx_v = 0.0
+    loadsumy_v = 0.0
+    loadsumz_v = 0.0
     for node in range(nn):
         dof = 3 * node
-        loadsumx += glv[dof]
-        loadsumy += glv[dof + 1]
-        loadsumz += glv[dof + 2]
+        loadsumx_p += glv_P[dof]
+        loadsumy_p += glv_P[dof + 1]
+        loadsumz_p += glv_P[dof + 2]
+        loadsumx_v += glv_V[dof]
+        loadsumy_v += glv_V[dof + 1]
+        loadsumz_v += glv_V[dof + 2]
 
     print("mesh volume", V)
-    print("loadsumx", loadsumx)
-    print("loadsumy", loadsumy)
-    print("loadsumz", loadsumz, "\n")
+    print("permanent loads:")
+    print("loadsumx", loadsumx_p)
+    print("loadsumy", loadsumy_p)
+    print("loadsumz", loadsumz_p, "\n")
+    print("variable loads:")
+    print("loadsumx", loadsumx_v)
+    print("loadsumy", loadsumy_v)
+    print("loadsumz", loadsumz_v, "\n")
 
     # for rw in dmat:
     #     print(rw)
@@ -886,7 +931,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
 
     # print("ns, pos: ", ns, pos)
 
-    return stm_r, row_r, col_r, glv, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x
+    return stm_r, row_r, col_r, glv_V, glv_P, modf, V, loadsumx_p, loadsumy_p, loadsumz_p, loadsumx_v, loadsumy_v, loadsumz_v, ne, nn, x
 
 
 @jit(nopython=True, cache=True)
@@ -1009,9 +1054,10 @@ def calcTSM(elNodes, nocoord, materialbyElement, fix, rhox, rhoy, rhoz, a_c, a_s
 
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
-             glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield_inp, disp_output,
-             fcSC_window, target_LF, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix, model):
-    ndof = len(glv)  # number of degrees of freedom
+             glv_V, glv_P, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield_inp,
+             disp_output,
+             fcSC_window, target_LF_V, target_LF_P, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix, model):
+    ndof = len(glv_P)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
 
     pr_u = fcSC_window.progressBar.setValue
@@ -1020,13 +1066,19 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     EC_u = fcSC_window.eps_c.setText
     ES_u = fcSC_window.eps_s.setText
 
+    target_LF_P_0 = 0.0
+    target_LF_V_0 = 0.0
+
+    active_plot = 0  # permanent load
+    active_strain = 0  # concrete compressive strain
+
     t0 = time.perf_counter()
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
     prn_upd("construct sparse global stiffness matrix: {:.2e} s".format((t1 - t0)))
 
     # TODO: improve error estimate for pure displacement control
-    qnorm = np.linalg.norm(glv)
+    qnorm = np.linalg.norm(glv_P + glv_V)
     # if qnorm < 1.0: qnorm = 1.0
 
     # Cholesky decomposition of the global stiffness matrix and elastic solution using Cholmod
@@ -1039,14 +1091,21 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         sparse_cholesky = SparseCholesky(gsm)
 
     t1 = time.perf_counter()
-    f = fixdof * glv + modf
+    fp = fixdof * glv_P + modf
+    fv = fixdof * glv_V + modf
     if settings["solver"] == 1:
-        ue = factor(f)  # elastic solution
+        uep = factor(fp)  # elastic solution permanent load
+        uev = factor(fv)  # elastic solution variable load
     elif settings["solver"] == 2:
-        ue = np.empty(gsm.shape[0])
-        solver.solve(f, ue)
+        uep = np.empty(gsm.shape[0])
+        uev = np.empty(gsm.shape[0])
+        solver.solve(fp, uep)
+        solver.solve(fv, uev)
     elif settings["solver"] == 3:
-        ue = sparse_cholesky.solve_A(f)
+        uep = sparse_cholesky.solve_A(fp)
+        uev = sparse_cholesky.solve_A(fv)
+    t2 = time.perf_counter()
+    prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
 
     # print("ue_max (after GSM): ", np.max(np.absolute(ue)))
 
@@ -1055,12 +1114,15 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     # Q = np.dot(gsmd, ue)
     # print("ERROR Elastic Stiffness Matrix: ", np.linalg.norm(Q - f) / np.linalg.norm(f))
 
-    t2 = time.perf_counter()
-    prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
-
     # initiate analysis
-    dl0 = min(target_LF, 1.0) / nstep
-    if float(nstep) == 1.0 : dl0 = target_LF # nstep == 1 execute an elastic analysis
+    # dl0 = min(target_LF_V, 1.0) / nstep
+    # if float(nstep) == 1.0: dl0 = target_LF_V  # nstep == 1 execute an elastic analysis
+    # dl = dl0
+    # du = dl * uev
+
+    dl0 = 1.0 / nstep
+    if float(nstep) == 1.0: dl0 = 1.0  # nstep == 1 execute an elastic analysis
+    ue = (target_LF_P - target_LF_P_0) * uep + (target_LF_V - target_LF_V_0) * uev
     dl = dl0
     du = dl * ue
 
@@ -1087,6 +1149,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     disp_new = np.zeros(ndof, dtype=np.float64)  # displacement results
     disp_old = np.zeros(ndof, dtype=np.float64)  # displacement results
     lbd = np.zeros(1, dtype=np.float64)  # load level
+    lbdp = np.zeros(1, dtype=np.float64)  # load level
+    lbdv = np.zeros(1, dtype=np.float64)  # load level
     rfl = np.zeros(1, dtype=np.float64)  # reaction force level (for displacement control)
     qin = np.zeros(3 * len(nocoord), dtype=np.float64)
 
@@ -1096,7 +1160,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     if max(movdof) == 1:
         qelastic = np.zeros(3 * len(nocoord), dtype=np.float64)
         update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, ue, sig_old, sig_new,
-                           sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old, epss_new, sig_test,
+                           sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old,
+                           epss_new, sig_test,
                            qelastic, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0, model)
 
         qelastic *= movdof
@@ -1112,9 +1177,14 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     step = -1
     cnt = True
     fail = False
-    dof_max = np.argmax(np.abs(ue))
+    # dof_max = np.argmax(np.abs(uev))
+    dof_max_p = np.argmax(np.abs(uep))
+    dof_max_v = np.argmax(np.abs(uev))
+    print("dof_max_p: ", dof_max_p)
+    print("dof_max_v: ", dof_max_v)
 
-    un = [0.]
+    unp = [0.]
+    unv = [0.]
     epsccplot = [0.]
     epsctplot = [0.]
     epssplot = [0.]
@@ -1131,14 +1201,23 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         step = 0
         out_disp = 1
         lbd = np.append(lbd, 1.0)
+        lbdp = np.append(lbdp, target_LF_P)
+        lbdv = np.append(lbdv, target_LF_V)
         rfl = np.append(rfl, 1.0)
+        # disp_new = dl * uev
         disp_new = dl * ue
-        un.append(np.max(np.abs(disp_new)))
+        unp.append(np.max(np.abs(dl * uep)))
+        unv.append(np.max(np.abs(dl * uev)))
+        epsccplot.append(0.0)
+        epsctplot.append(0.0)
+        epssplot.append(0.0)
+        pdfcdplot.append(0.0)
         qin = np.zeros(3 * len(nocoord), dtype=np.float64)
         sig_yield *= 1.0e6
         fcd *= 1.0e6
         update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, disp_new, sig_old, sig_new,
-                           sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old, epss_new, sig_test,
+                           sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old,
+                           epss_new, sig_test,
                            qin, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0, model)
 
         cnt = False
@@ -1150,7 +1229,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     # for node in range(len(nocoord)):
     #     dof = 3 * node
     #     fex_sum += f[dof]
-    # print("(fixdof * glv + modf)_sum (after GSM): ", fex_sum)
+    # print("(fixdof * glv_V + modf)_sum (after GSM): ", fex_sum)
     # print("ue_max (after GSM): ", np.max(ue))
     # print("elastic stiffness GSM: ", fex_sum / np.max(ue))
 
@@ -1178,7 +1257,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 epscc_old = epscc_new.copy()
                 epsct_old = epsct_new.copy()
                 epss_old = epss_new.copy()
+                # print("lbd[step]: ", lbd[step])
+                # print("dl: ", dl)
                 lbd = np.append(lbd, lbd[step] + dl)  # lbd: load level
+                # print("lbd_old: ",lbd[step])
+                # print("lbd_new: ",lbd[step+1])
             else:
                 lbd[step + 1] = lbd[step] + dl
 
@@ -1193,13 +1276,16 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             # print("du_0_max: ", np.max(du))
 
             update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig_old, sig_new,
-                               sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old, epss_new, sig_test,
+                               sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new,
+                               epss_old, epss_new, sig_test,
                                qin, rhox, rhoy, rhoz, a_c, a_s, ev,
                                step, iterat, model)
 
             # print("sig_new_max: ", np.max(sig_new))
 
-            fex = fixdof * lbd[step + 1] * glv
+            # fex = fixdof * lbd[step + 1] * glv_V
+            fex = fixdof * ((target_LF_P_0 + lbd[step + 1] * (target_LF_P - target_LF_P_0)) * glv_P +
+                            (target_LF_V_0 + lbd[step + 1] * (target_LF_V - target_LF_V_0)) * glv_V)
             fin = fixdof * qin
             r = fex - fin
 
@@ -1224,7 +1310,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             #     t1 = time.perf_counter()
             #     prn_upd("construct sparse tangent stiffness matrix: {:.2e} s".format((t1 - t0)))
             #     factor = cholesky(tsm)
-            #     f = fixdof * glv + modf
+            #     f = fixdof * glv_V + modf
             #     ue = factor(f)  # tangent elastic solution
 
             # print("ue: ",ue)
@@ -1233,14 +1319,14 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             # print("|f| after TSM: ", np.linalg.norm(f))
             # print("|ue|: ", np.linalg.norm(ue))
 
-            fex_sum = 0.0
-            fey_sum = 0.0
-            fez_sum = 0.0
-            for node in range(len(nocoord)):
-                dof = 3 * node
-                fex_sum += f[dof]
-                fey_sum += f[dof + 1]
-                fez_sum += f[dof + 2]
+            # fex_sum = 0.0
+            # fey_sum = 0.0
+            # fez_sum = 0.0
+            # for node in range(len(nocoord)):
+            #     dof = 3 * node
+            #     fex_sum += f[dof]
+            #     fey_sum += f[dof + 1]
+            #     fez_sum += f[dof + 2]
             # print("fex_sum (after TSM): ", fex_sum)
             # print("fey_sum (after TSM): ", fey_sum)
             # print("fez_sum (after TSM): ", fez_sum)
@@ -1281,21 +1367,21 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
                 if iRiks:
                     teller = -np.dot(a, due)
+                    # noemer = np.dot(a, uev)
                     noemer = np.dot(a, ue)
-                    # print(">>>> lbd[step + 1]: ", lbd[step + 1])
-                    # print(">>>> teller: ", teller, "noemer: ", noemer)
-                    # print(">>>> teller/noemer: ", teller / noemer)
-                    # dl = -np.dot(a, due) / np.dot(a, ue)
+                    if noemer == 0.0: noemer = 1.0
                     dl = teller / noemer
-                    # if error < 0.99 * error_old: dl = 0.0
+                    # dl = 0.0
                     lbd[step + 1] += dl
-                    # print(">>>> lbd[step + 1]: ", lbd[step + 1])
+
                 else:
                     dl = 0.0
 
                 # print("dl after riks: ", dl)
                 # print("lbd[step + 1]: ", lbd[step + 1])
                 # Riks control correction to displacement increment
+
+                # du += due + dl * uev
                 du += due + dl * ue
 
                 # r_sum = 0.0
@@ -1313,14 +1399,21 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 # print(">>>> ---------------- update stresses and loads -------------------")
 
                 update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig_old, sig_new,
-                                   sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old, epss_new,
+                                   sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new,
+                                   epss_old, epss_new,
                                    sig_test, qin, rhox, rhoy, rhoz, a_c, a_s,
                                    ev, step, iterat, model)
 
                 # print("norm(qin): ", np.linalg.norm(qin))
 
                 # calculate out of balance error
-                r = fixdof * (lbd[step + 1] * glv - qin)
+                # r = fixdof * (lbd[step + 1] * glv_V - qin)
+
+                fex = fixdof * ((target_LF_P_0 + lbd[step + 1] * (target_LF_P - target_LF_P_0)) * glv_P +
+                                (target_LF_V_0 + lbd[step + 1] * (target_LF_V - target_LF_V_0)) * glv_V)
+                fin = fixdof * qin
+                r = fex - fin
+
                 rnorm = np.linalg.norm(r)
                 # qnorm = np.linalg.norm(fixdof * qin)
                 error = rnorm / qnorm
@@ -1339,7 +1432,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     if restart == 4:
                         print("MAXIMUM RESTARTS REACHED")
                         fail = True
-                        return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lout, un, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
+                        return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
 
                     restart += 1
                     if step > 0:
@@ -1348,27 +1441,38 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     else:
                         # for first step only
                         dl = dl0 / scale_re / restart
+                        # du = dl * uev / scale_re / restart
                         du = dl * ue / scale_re / restart
                     lbd[step + 1] = lbd[step] + dl
 
                     qin = np.zeros(3 * len(nocoord), dtype=np.float64)
                     update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig_old, sig_new,
-                                       sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old, epss_new,
+                                       sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new,
+                                       epsct_new, epss_old, epss_new,
                                        sig_test, qin, rhox, rhoy, rhoz, a_c,
                                        a_s, ev, step, iterat, model)
 
-                    r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
+                    # r = fixdof * (lbd[step + 1] * (glv_V + modf) - qin)
+
+                    fex = fixdof * ((target_LF_P_0 + lbd[step + 1] * (target_LF_P - target_LF_P_0)) * glv_P +
+                                    (target_LF_V_0 + lbd[step + 1] * (target_LF_V - target_LF_V_0)) * glv_V)
+                    fin = fixdof * qin
+                    r = fex - fin
+
                     rnorm = np.linalg.norm(r)
                     # qnorm = np.linalg.norm(fixdof * qin)
                     error = rnorm / qnorm
 
                     iterat = 0
 
-            # if abs(lbd[step + 1]) > abs(target_LF) and iRiks:
-            if abs(target_LF - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
+            # if abs(lbd[step + 1]) > abs(target_LF_V) and iRiks:
+            # if abs(target_LF_V - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
+            # if abs(1.0 - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
+            if lbd[step + 1] > 1.0 and iRiks:
                 print("REACHED TARGET LOAD")
                 iRiks = False
-                dl = target_LF - lbd[step]
+                # dl = target_LF_V - lbd[step]
+                dl = 1.0 - lbd[step]
                 du = dl / (lbd[step + 1] - lbd[step]) * du
                 step -= 1
                 pstep -= 1
@@ -1378,7 +1482,13 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 LF_u(str(round(lbd[step + 1], 3)))
                 disp_old = disp_new.copy()
                 disp_new += du
-                dl = lbd[step + 1] - lbd[step]
+                if pstep > 1:
+                    dl = lbd[step + 1] - lbd[step]
+                else:
+                    dl = lbd[step + 1]
+                # print("end of converged load step")
+                # print("lbd[step + 1]: ", lbd[step + 1])
+                # print("lbd[step]: ", lbd[step])
                 if max(movdof) == 1:
                     rfl = np.append(rfl, np.sum(movdof * qin))
 
@@ -1392,7 +1502,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     du *= scale_up
 
                 # un.append(np.max(np.abs(disp_new)))
-                un.append(disp_new[dof_max])
+                unp.append(disp_new[dof_max_p])
+                unv.append(disp_new[dof_max_v])
                 # update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, us_s, peeq, csr,
                 #                 triax,
                 #                 pressure, sigmises, ecr)
@@ -1407,26 +1518,33 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
                 if not iRiks: break
 
+        lbdp = np.append(lbdp, target_LF_P_0 + (target_LF_P - target_LF_P_0) * lbd[len(lbdp):])
+        lbdv = np.append(lbdv, target_LF_V_0 + (target_LF_V - target_LF_V_0) * lbd[len(lbdv):])
+
         if max(movdof) == 1:
             lout = rfl
         else:
-            lout = lbd
+            lout = lbdp
 
         prn_upd("\n***************************** Progress Report Step: {} *****************************".format(step))
 
         print(
-            '{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}'.format(
-                "load",
-                "un",
+            '{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}'.format(
+                "lbd_p",
+                "disp_p",
+                "lbd_v",
+                "disp_v",
                 "p/fcd",
                 "eps_cc",
                 "eps_ct",
                 "eps_s"))
         for i in range(len(lout)):
             print(
-                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}'.format(
-                    lout[i],
-                    un[i],
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}'.format(
+                    lbdp[i],
+                    unp[i],
+                    lbdv[i],
+                    unv[i],
                     pdfcdplot[i],
                     epsccplot[i],
                     epsctplot[i],
@@ -1435,7 +1553,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         us_c = 0.0035
         us_s = 0.025
 
-        if fcSC_window.eps_cRbtn.isChecked():
+        if active_strain == 0:
             epsc_limit = np.argwhere(np.asarray(epsccplot) > us_c)
             epsc_non_zero = np.nonzero(epsccplot)
             if len(epsc_non_zero[0]) != 0:
@@ -1459,11 +1577,62 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 ul_limit = 0
 
         averaged = fcSC_window.averagedChk.isChecked()
-        cnt, dl, du, target_LF = plot(fcSC_window, averaged, el_limit, ul_limit, un, lout, epsccplot, epsctplot, epssplot, dl, du,
-                                      target_LF, nstep, ue, us_s, disp_new, disp_old, elNodes, nocoord, sig_new,
-                                      epss_new, sigmises, epscc_new, epsct_new, noce, sig_yield_inp, pressure / fcd)
+        # cnt, dl, du, target_LF_P, target_LF_V = plot(fcSC_window, averaged, el_limit, ul_limit, un, lout, epsccplot,
+        #                                              epsctplot, epssplot, dl, du, target_LF_V, target_LF_P, nstep, uev,
+        #                                              us_s, disp_new, disp_old, elNodes, nocoord, sig_new,
+        #                                              epss_new, sigmises, epscc_new, epsct_new, noce, sig_yield_inp,
+        #                                              pressure / fcd)
 
-        # print("target_LF: ", target_LF)
+        cnt, dl, du, target_LF_P_0, target_LF_V_0, target_LF_P, target_LF_V, update, active_plot, active_strain = plot(
+            fcSC_window,
+            averaged,
+            el_limit,
+            ul_limit, unp,
+            unv, lbdp,
+            lbdv, epsccplot,
+            epsctplot,
+            epssplot, dl,
+            du,
+            target_LF_V_0,
+            target_LF_P_0,
+            target_LF_V,
+            target_LF_P,
+            nstep,
+            uev,
+            us_s, disp_new,
+            disp_old,
+            elNodes,
+            nocoord,
+            sig_new,
+            epss_new,
+            sigmises,
+            epscc_new,
+            epsct_new, noce,
+            sig_yield_inp,
+            pressure / fcd,
+            active_plot,
+            active_strain)
+
+        # print("update: ", update)
+        # print("lbd[-1]:", lbd[-1])
+
+        ue = (target_LF_P - target_LF_P_0) * uep + (target_LF_V - target_LF_V_0) * uev
+        # du = dl * ue
+
+        if update:
+            du = dl * ue
+        #     step += 1
+        #     lbd = np.append(lbd, 0.0)
+        #     unp.append(unp[-1])
+        #     pdfcdplot.append(pdfcdplot[-1])
+        #     epsccplot.append(epsccplot[-1])
+        #     epsctplot.append(epsctplot[-1])
+        #     epssplot.append(epssplot[-1])
+
+        # print("target_LF_P_0: ", target_LF_P_0)
+        # print("target_LF_P: ", target_LF_P)
+        # print("target_LF_V_0: ", target_LF_V_0)
+        # print("target_LF_V: ", target_LF_V)
         # print("dl: ", dl)
 
     prn_upd("total time evaluating K_inv * r: {}".format(factor_time_tot))
@@ -1472,21 +1641,27 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         prn_upd("average time to evaluate K_inv * r: {}".format(factor_time_tot / iterat_tot))
 
     out = step + 1
-    u_out = un[out] - un[out - 1]
+    u_out = unp[out] - unp[out - 1]
     l_out = lbd[out] - lbd[out - 1]
     prn_upd("Step: {0:2d} Load level increment: {1:.3f} Displacement increment: {2:.4e}".format(out, l_out,
                                                                                                 u_out))
 
     if disp_output == "total":
-        return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lout, un, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
+        return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
     else:
-        return disp_new - disp_old, sig_new, epscc_new, epsct_new, sigmises, epss_new, lout, un, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
+        return disp_new - disp_old, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
 
 
 # plot the load-deflection curve
-def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epssplot, dl, du, target_LF, nstep, ue, us_s,
-         disp_new, disp_old, elNodes, nocoord, sig_new, epss, sigmises, epscc, epsct, noce, sig_yield, pdfcd):
+# def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epssplot, dl, du, target_LF_V, target_LF_P,
+#          nstep, uev, us_s, disp_new, disp_old, elNodes, nocoord, sig_new, epss, sigmises, epscc, epsct, noce, sig_yield,
+#          pdfcd):
 
+
+def plot(fcVM, averaged, el_limit, ul_limit, unp, unv, lbdp, lbdv, epsccplot, epsctplot, epssplot, dl, du,
+         target_LF_V_0,
+         target_LF_P_0, target_LF_V, target_LF_P, nstep, ue, us_s, disp_new, disp_old, elNodes, nocoord, sig_new, epss,
+         sigmises, epscc, epsct, noce, sig_yield, pdfcd, active_plot, active_strain):
     class Index(object):
 
         def __init__(self, averaged, disp_new,
@@ -1513,17 +1688,23 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epss
 
         def add(self, event):
             self.cnt = True
-            self.clicked = True
-            print("self.LF: ", self.LF)
-            print("self.target_LF: ", self.target_LF)
-            print("self.target_LF_out: ", self.target_LF_out)
-            cr1 = (self.target_LF - self.LF) * (self.target_LF_out - self.LF) <= 0.0
-            print(cr1)
-            if (cr1):
-                self.dl = np.sign(self.target_LF_out - self.LF) * 1.0 / self.nstep
-                self.du = self.dl * self.ue
-                print("self.dl: ", self.dl)
+
+            if self.target_LF_P_update != self.target_LF_P:
+                self.dl = 1.0 / self.nstep
+                self.update = True
+
+            self.target_LF_P_0 = self.lbdp
+            self.target_LF_P = self.target_LF_P_update
+
+            if self.target_LF_V_update != self.target_LF_V:
+                self.dl = 1.0 / self.nstep
+                self.update = True
+
+            self.target_LF_V_0 = self.lbdv
+            self.target_LF_V = self.target_LF_V_update
+
             plt.close()
+            self.clicked = True
 
         def rev(self, event):
             self.cnt = True
@@ -1536,8 +1717,105 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epss
             if self.cnt == False:
                 self.stop('stop_event')
 
-        def submit(self, LF):
-            self.target_LF_out = float(LF)
+        def submit_P(self, LF_P):
+            self.target_LF_P_update = float(LF_P)
+
+        def submit_V(self, LF_V):
+            self.target_LF_V_update = float(LF_V)
+
+        def select_plot(self, label):
+            if label == "Permanent":
+                load_def_plot.set_xdata(unp)
+                load_def_plot.set_ydata(lbdp)
+                strain_plot.set_ydata(lbdp)
+                self.active = 0
+            else:
+                load_def_plot.set_xdata(unv)
+                load_def_plot.set_ydata(lbdv)
+                strain_plot.set_ydata(lbdv)
+                self.active = 1
+            ax[0].relim()
+            ax[0].autoscale_view()
+            ax[1].relim()
+            ax[1].autoscale_view()
+            self.radio2.set_active(self.strain)
+            # plt.draw()
+
+        def select_strain(self, label):
+            if self.active == 0: # permanent load
+                lbd = lbdp
+                un = unp
+            else:
+                lbd = lbdv
+                un = unv
+
+            if label == "Concrete":
+                self.strain = 0
+                eps_ult = 0.0035
+                eps = epsccplot
+            else:
+                self.strain = 1
+                eps_ult = 0.025
+                eps = epssplot
+
+            eps_limit = np.argwhere(np.asarray(eps) > eps_ult)
+            eps_non_zero = np.nonzero(eps)
+
+            if len(eps_non_zero[0]) != 0:
+                el_limit = eps_non_zero[0][0] - 1
+            else:
+                el_limit = 0
+
+            if len(eps_limit) != 0:
+                ul_limit = eps_limit[0][0] - 1
+            else:
+                ul_limit = 0
+
+            # Plot the limit lines
+            if ul_limit == 0:
+                self.load_def_limit_1.set_xdata([0.0, 0.0])
+                self.load_def_limit_1.set_ydata([0.0, 0.0])
+                self.load_def_limit_2.set_xdata([0.0, 0.0])
+                self.load_def_limit_2.set_ydata([0.0, 0.0])
+                self.load_def_limit_3.set_xdata([0.0, 0.0])
+                self.load_def_limit_3.set_ydata([0.0, 0.0])
+                self.strain_plot_limit_1.set_xdata([0.0, 0.0])
+                self.strain_plot_limit_1.set_ydata([0.0, 0.0])
+                self.strain_plot_limit_2.set_xdata([0.0, 0.0])
+                self.strain_plot_limit_2.set_ydata([0.0, 0.0])
+                self.strain_plot_limit_3.set_xdata([0.0, 0.0])
+                self.strain_plot_limit_3.set_ydata([0.0, 0.0])
+
+            else:
+                fac = (eps_ult - eps[ul_limit]) / (eps[ul_limit + 1] - eps[ul_limit])
+                lbd_limit = lbd[ul_limit] + fac * (lbd[ul_limit + 1] - lbd[ul_limit])
+                # print("fac: ", fac)
+                # print("lbd_limit: ", lbd_limit)
+                un_limit = un[ul_limit] + fac * (un[ul_limit + 1] - un[ul_limit])
+                self.load_def_limit_1.set_xdata([0.0, un_limit])
+                self.load_def_limit_1.set_ydata([lbd_limit, lbd_limit])
+                self.load_def_limit_2.set_xdata([un_limit, un_limit])
+                self.load_def_limit_2.set_ydata([0.0, lbd_limit])
+                self.load_def_limit_3.set_xdata([0.0, un_limit])
+                self.load_def_limit_3.set_ydata([lbd[el_limit], lbd[el_limit]])
+                self.strain_plot_limit_1.set_xdata([0.0, eps_ult])
+                self.strain_plot_limit_1.set_ydata([lbd_limit, lbd_limit])
+                self.strain_plot_limit_2.set_xdata([eps_ult, eps_ult])
+                self.strain_plot_limit_2.set_ydata([0.0, lbd_limit])
+                self.strain_plot_limit_3.set_xdata([0.0, eps_ult])
+                self.strain_plot_limit_3.set_ydata([lbd[el_limit], lbd[el_limit]])
+
+            if label == "Concrete":
+                ax[1].set_xlabel('concrete plastic compressive strain [-]')
+                strain_plot.set_xdata(epsccplot)
+                self.strain = 0
+            else:
+                ax[1].set_xlabel('steel plastic tensile strain [-]')
+                strain_plot.set_xdata(epssplot)
+                self.strain = 1
+            ax[1].relim()
+            ax[1].autoscale_view()
+            plt.draw()
 
         def PSV(self, event):
 
@@ -1603,11 +1881,15 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epss
 
             )
 
-            tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = mapStresses(self.averaged, self.elNodes,
-                                                                                  self.nocoord,
-                                                                                  self.sig_new, self.epscc, self.epsct,
-                                                                                  self.sigmises, self.epss, self.noce,
-                                                                                  self.sig_yield, self.pdfcd)
+            tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = mapStresses(self.averaged,
+                                                                                               self.elNodes,
+                                                                                               self.nocoord,
+                                                                                               self.sig_new, self.epscc,
+                                                                                               self.epsct,
+                                                                                               self.sigmises, self.epss,
+                                                                                               self.noce,
+                                                                                               self.sig_yield,
+                                                                                               self.pdfcd)
 
             tet10s1, tet10s2, tet10s3, sv1, sv2, sv3 = calculate_principal_stress(tet10stress)
 
@@ -1760,11 +2042,15 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epss
 
             )
 
-            tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = mapStresses(self.averaged, self.elNodes,
-                                                                                  self.nocoord,
-                                                                                  self.sig_new, self.epscc, self.epsct,
-                                                                                  self.sigmises, self.epss, self.noce,
-                                                                                  self.sig_yield, self.pdfcd)
+            tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = mapStresses(self.averaged,
+                                                                                               self.elNodes,
+                                                                                               self.nocoord,
+                                                                                               self.sig_new, self.epscc,
+                                                                                               self.epsct,
+                                                                                               self.sigmises, self.epss,
+                                                                                               self.noce,
+                                                                                               self.sig_yield,
+                                                                                               self.pdfcd)
 
             x_range = max(nocoord[:, 0]) - min(nocoord[:, 0])
             y_range = max(nocoord[:, 1]) - min(nocoord[:, 1])
@@ -1827,44 +2113,59 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epss
 
             p.show(cpos=[1.0, 1.0, 1.0])
 
-    print(len(un), len(lbd))
+    # print(len(un), len(lbd))
     callback = Index(averaged, disp_new,
                      disp_old, elNodes, nocoord, sig_new, epss,
                      sigmises, epscc, epsct, noce, sig_yield)
     callback.cnt = False
     callback.clicked = False
+    callback.update = False
     callback.dl = dl
     callback.du = du
-    callback.target_LF = target_LF
-    callback.target_LF_out = target_LF
-    callback.LF = lbd[-1]
+    callback.target_LF_P_0 = target_LF_P_0
+    callback.target_LF_P = target_LF_P
+    callback.target_LF_V_0 = target_LF_V_0
+    callback.target_LF_V = target_LF_V
+    callback.target_LF_P_update = target_LF_P
+    callback.target_LF_V_update = target_LF_V
+    callback.lbdp = lbdp[-1]
+    callback.lbdv = lbdv[-1]
+    # callback.uev = uev
     callback.ue = ue
     callback.nstep = nstep
     fig, ax = plt.subplots(1, 2, figsize=(10, 6))
     ax[1].xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
     fig.canvas.manager.set_window_title('fcSC')
     plt.subplots_adjust(bottom=0.2)
-    ax[0].plot(un, lbd, '-ok')
+    load_def_plot, = ax[0].plot(unp, lbdp, '-ok')
     ax[0].set(xlabel='displacement [mm]', ylabel='load factor [-] or load [N]', title='')
-    if fcVM.eps_cRbtn.isChecked():
-        ax[1].set(xlabel='concrete plastic compressive strain [-]', title='')
-        ax[1].plot(epsccplot, lbd, '-ok')
-    else:
-        ax[1].set(xlabel='steel plastic tensile strain [-]', title='')
-        ax[1].plot(epssplot, lbd, '-ok')
+    strain_plot, = ax[1].plot(epsccplot, lbdp, '-ok')
+    ax[1].set(xlabel='concrete plastic compressive strain [-]', title='')
+    callback.load_def_limit_1, = ax[0].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
+    callback.load_def_limit_2, = ax[0].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
+    callback.load_def_limit_3, = ax[0].plot([0,0, 0,0], [0,0, 0,0], color='b', linestyle="--")
+    callback.strain_plot_limit_1, = ax[1].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
+    callback.strain_plot_limit_2, = ax[1].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
+    callback.strain_plot_limit_3, = ax[1].plot([0,0, 0,0], [0,0, 0,0], color='b', linestyle="--")
+
     ax[0].grid()
     ax[1].grid()
-    b_w = 0.075
-    b_h = 0.06
-    b_s = 0.01
-    b_y = 0.05
+    b_w = 0.075  # box width
+    b_h = 0.06  # box height
+    b_s = 0.01  # box separation
+    b_y = 0.05  # box vertical position
+    b_t = 0.05  # text width
+    off1 = 0.3  # horizontal offset 1
+    off2 = 0.675  # horizontal offset 2
     # axstop = plt.axes([0.5 - b_w - b_s, b_y, b_w, b_h])
     # axadd = plt.axes([0.5 + b_s, b_y, b_w, b_h])
-    axstop = plt.axes([0.4 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
-    axadd = plt.axes([0.4 - b_w / 2.0, b_y, b_w, b_h])
-    axbox = plt.axes([0.4 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
-    axVTK = plt.axes([0.675, b_y, b_w, b_h])
-    axPSV = plt.axes([0.675 + b_w + b_s, b_y, b_w, b_h])
+    axstop = plt.axes([off1 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
+    axadd = plt.axes([off1 - b_w / 2.0, b_y, b_w, b_h])
+    axbox_P = plt.axes([off1 - b_w / 2.0 + (b_w + b_s) + b_t, b_y, b_w, b_h])
+    axbox_V = plt.axes([off1 - b_w / 2.0 + 2 * (b_w + b_s) + 2 * b_t, b_y, b_w, b_h])
+    # off1 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005
+    axVTK = plt.axes([off2, b_y, b_w, b_h])
+    axPSV = plt.axes([off2 + b_w + b_s, b_y, b_w, b_h])
     # axbox = plt.axes([0.53, b_y, b_w, b_h])
     bstop = Button(axstop, 'stop')
     bstop.on_clicked(callback.stop)
@@ -1876,46 +2177,74 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, epsccplot, epsctplot, epss
     bPSV.on_clicked(callback.PSV)
     # brev = Button(axrev, 'rev')
     # brev.on_clicked(callback.rev)
-    text_box = TextBox(axbox, "", textalignment="center")
-    text_box.set_val(target_LF)
-    text_box.on_submit(callback.submit)
-    fig.text(0.4 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Target Load Factor', fontsize=10)
+    text_box_V = TextBox(axbox_V, "", textalignment="center")
+    text_box_V.set_val(target_LF_V)
+    text_box_V.on_submit(callback.submit_V)
+    fig.text(off1 - b_w / 2.0 + b_w + b_s, b_y + b_h / 2.0 - 0.01, 'LF_PL:', fontsize=10)
+    text_box_P = TextBox(axbox_P, "", textalignment="center")
+    text_box_P.set_val(target_LF_P)
+    text_box_P.on_submit(callback.submit_P)
+
+    callback.active = active_plot
+    callback.strain = active_strain
+
+    rax2 = plt.axes([0.555, 0.9, 0.12, 0.08])
+    radio2 = RadioButtons(rax2, ["Concrete", "Steel"], active=callback.strain)
+    callback.radio2 = radio2
+    radio2.on_clicked(callback.select_strain)
+    radio2.set_active(active_strain)
+
+    rax1 = plt.axes([0.13, 0.9, 0.12, 0.08])
+    radio1 = RadioButtons(rax1, ["Permanent", "Variable"], active=callback.active)
+    radio1.on_clicked(callback.select_plot)
+    radio1.set_active(active_plot)
+
+    fig.text(off1 - b_w / 2.0 + 2 * (b_w + b_s) + b_t, b_y + b_h / 2.0 - 0.01, 'LF_VL:', fontsize=10)
+
+    # off1 - b_w / 2.0 + b_w + b_s
     fig.canvas.mpl_connect('close_event', callback.close_window)
 
-    if ul_limit != 0:
-        if fcVM.eps_cRbtn.isChecked():
-            epsc_ult = 0.0035
-            fac = (epsc_ult - epsccplot[ul_limit]) / (epsccplot[ul_limit + 1] - epsccplot[ul_limit])
-            lbd_limit = lbd[ul_limit] + fac * (lbd[ul_limit + 1] - lbd[ul_limit])
-            un_limit = un[ul_limit] + fac * (un[ul_limit + 1] - un[ul_limit])
-            ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
-            ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
-            ax[0].plot([un[el_limit], un[el_limit]], [0.0, lbd[el_limit]], color='b', linestyle="--")
-            ax[0].plot([0.0, un[el_limit]], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
-            ax[1].plot([0.0, epsc_ult], [lbd_limit, lbd_limit], color='r', linestyle="--")
-            ax[1].plot([epsc_ult, epsc_ult], [0.0, lbd_limit], color='r', linestyle="--")
-            ax[1].plot([0.0, epsc_ult], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
-        else:
-            # print("ul_limit: ", ul_limit)
-            fac = (us_s - epssplot[ul_limit]) / (epssplot[ul_limit + 1] - epssplot[ul_limit])
-            lbd_limit = lbd[ul_limit] + fac * (lbd[ul_limit + 1] - lbd[ul_limit])
-            un_limit = un[ul_limit] + fac * (un[ul_limit + 1] - un[ul_limit])
-            ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
-            ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
-            ax[0].plot([un[el_limit], un[el_limit]], [0.0, lbd[el_limit]], color='b', linestyle="--")
-            ax[0].plot([0.0, un[el_limit]], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
-            ax[1].plot([0.0, us_s], [lbd_limit, lbd_limit], color='r', linestyle="--")
-            ax[1].plot([us_s, us_s], [0.0, lbd_limit], color='r', linestyle="--")
-            ax[1].plot([0.0, us_s], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
+    # Plot the limit lines
+    # if ul_limit != 0:
+    #     if active_strain == 0:
+    #         epsc_ult = 0.0035
+    #         fac = (epsc_ult - epsccplot[ul_limit]) / (epsccplot[ul_limit + 1] - epsccplot[ul_limit])
+    #         lbd_limit = lbdp[ul_limit] + fac * (lbdp[ul_limit + 1] - lbdp[ul_limit])
+    #         un_limit = unp[ul_limit] + fac * (unp[ul_limit + 1] - unp[ul_limit])
+    #         # load_def_limit_1, = ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
+    #         load_def_limit_2, = ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
+    #         # load_def_limit_3, = ax[0].plot([unp[el_limit], unp[el_limit]], [0.0, lbdp[el_limit]], color='b',
+    #         #                                linestyle="--")
+    #         # load_def_limit_4, = ax[0].plot([0.0, unp[el_limit]], [lbdp[el_limit], lbdp[el_limit]], color='b',
+    #         #                                linestyle="--")
+    #         # strain_plot_1, = ax[1].plot([0.0, epsc_ult], [lbd_limit, lbd_limit], color='r', linestyle="--")
+    #         strain_plot_2, = ax[1].plot([epsc_ult, epsc_ult], [0.0, lbd_limit], color='r', linestyle="--")
+    #         # strain_plot_3, = ax[1].plot([0.0, epsc_ult], [lbdp[el_limit], lbdp[el_limit]], color='b', linestyle="--")
+    #     else:
+    #         # print("ul_limit: ", ul_limit)
+    #         fac = (us_s - epssplot[ul_limit]) / (epssplot[ul_limit + 1] - epssplot[ul_limit])
+    #         lbd_limit = lbdp[ul_limit] + fac * (lbdp[ul_limit + 1] - lbdp[ul_limit])
+    #         un_limit = unp[ul_limit] + fac * (unp[ul_limit + 1] - unp[ul_limit])
+    #         # load_def_limit_1, = ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
+    #         load_def_limit_2, = ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
+    #         # load_def_limit_3, = ax[0].plot([unp[el_limit], unp[el_limit]], [0.0, lbdp[el_limit]], color='b',
+    #         #                                linestyle="--")
+    #         # load_def_limit_4, = ax[0].plot([0.0, unp[el_limit]], [lbdp[el_limit], lbdp[el_limit]], color='b',
+    #         #                                linestyle="--")
+    #         # strain_plot_1, = ax[1].plot([0.0, us_s], [lbd_limit, lbd_limit], color='r', linestyle="--")
+    #         strain_plot_2, = ax[1].plot([us_s, us_s], [0.0, lbd_limit], color='r', linestyle="--")
+    #         # strain_plot_3, = ax[1].plot([0.0, us_s], [lbdp[el_limit], lbdp[el_limit]], color='b', linestyle="--")
 
-    plt.show()
+    # plt.show()
 
     while True:
         plt.pause(0.01)
         if callback.clicked:
             break
 
-    return callback.cnt, callback.dl, callback.du, callback.target_LF_out
+    return (
+    callback.cnt, callback.dl, callback.du, callback.target_LF_P_0, callback.target_LF_V_0, callback.target_LF_P,
+    callback.target_LF_V, callback.update, callback.active, callback.strain)
 
 
 # update PEEQ and CSR
@@ -1980,7 +2309,8 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, us_s
 
 @jit(nopython=True, cache=True, fastmath=True)
 def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig, sig_update,
-                       sigc, sigc_update, sigs, sigs_update, epscc, epsct, epscc_update, epsct_update, epss, epss_update, sig_test_global,
+                       sigc, sigc_update, sigs, sigs_update, epscc, epsct, epscc_update, epsct_update, epss,
+                       epss_update, sig_test_global,
                        qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat, model):
     # print("-------------------------update_stress_load-------------------------")
     u10 = np.empty(30, dtype=np.float64)  # displacements for the 10 tetrahedral nodes

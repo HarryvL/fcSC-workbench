@@ -446,64 +446,6 @@
                   <string>Output options </string>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_5">
-                  <item row="0" column="1">
-                   <widget class="QFrame" name="frame_2">
-                    <property name="frameShape">
-                     <enum>QFrame::StyledPanel</enum>
-                    </property>
-                    <property name="frameShadow">
-                     <enum>QFrame::Raised</enum>
-                    </property>
-                    <layout class="QVBoxLayout" name="verticalLayout_9">
-                     <item>
-                      <widget class="QRadioButton" name="eps_cRbtn">
-                       <property name="minimumSize">
-                        <size>
-                         <width>0</width>
-                         <height>27</height>
-                        </size>
-                       </property>
-                       <property name="text">
-                        <string>eps_c</string>
-                       </property>
-                       <property name="checked">
-                        <bool>true</bool>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QRadioButton" name="eps_sRbtn">
-                       <property name="minimumSize">
-                        <size>
-                         <width>0</width>
-                         <height>27</height>
-                        </size>
-                       </property>
-                       <property name="text">
-                        <string>eps_s</string>
-                       </property>
-                       <property name="checked">
-                        <bool>false</bool>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="Line" name="line">
-                       <property name="orientation">
-                        <enum>Qt::Horizontal</enum>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QCheckBox" name="averagedChk">
-                       <property name="text">
-                        <string>Nodal Averaged</string>
-                       </property>
-                      </widget>
-                     </item>
-                    </layout>
-                   </widget>
-                  </item>
                   <item row="0" column="0">
                    <widget class="QFrame" name="frame">
                     <property name="frameShape">
@@ -542,6 +484,20 @@
                        </property>
                       </widget>
                      </item>
+                     <item>
+                      <widget class="Line" name="line_2">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <widget class="QCheckBox" name="averagedChk">
+                       <property name="text">
+                        <string>Nodal Averaged</string>
+                       </property>
+                      </widget>
+                     </item>
                     </layout>
                    </widget>
                   </item>
@@ -572,127 +528,34 @@
                   <string>Control parameters (press Reset for defaults)</string>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_6">
-                  <item row="3" column="3">
-                   <widget class="QLineEdit" name="scale_3">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>1.2</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="2">
-                   <widget class="QLabel" name="label_13">
-                    <property name="text">
-                     <string>Scale3</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="0">
-                   <widget class="QLabel" name="label_12">
-                    <property name="text">
-                     <string>Scale2</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="1">
-                   <widget class="QLineEdit" name="scale_2">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>1.2</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="3">
-                   <widget class="QLineEdit" name="scale_1">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
+                  <item row="0" column="3">
+                   <widget class="QLineEdit" name="target_LF_V">
                     <property name="text">
                      <string>2.0</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="2">
-                   <widget class="QLabel" name="label_11">
-                    <property name="text">
-                     <string>Scale1</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="0">
-                   <widget class="QLabel" name="label_10">
-                    <property name="text">
-                     <string>Relax.</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="2" column="1">
-                   <widget class="QLineEdit" name="relax">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>1.2</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="3">
-                   <widget class="QLineEdit" name="error">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>1.0e-2</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="2">
-                   <widget class="QLabel" name="label_9">
-                    <property name="text">
-                     <string>Error</string>
-                    </property>
-                   </widget>
-                  </item>
                   <item row="1" column="0">
-                   <widget class="QLabel" name="label_8">
+                   <widget class="QLabel" name="label_7">
                     <property name="text">
-                     <string>Max. Iter.</string>
+                     <string>Steps</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <widget class="QLineEdit" name="target_LF_P">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>1.0</string>
                     </property>
                    </widget>
                   </item>
                   <item row="1" column="1">
-                   <widget class="QLineEdit" name="max_iter">
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>27</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string>20</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="3">
                    <widget class="QLineEdit" name="steps">
                     <property name="minimumSize">
                      <size>
@@ -705,22 +568,22 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="2">
-                   <widget class="QLabel" name="label_7">
-                    <property name="text">
-                     <string>Steps</string>
-                    </property>
-                   </widget>
-                  </item>
                   <item row="0" column="0">
                    <widget class="QLabel" name="label_6">
                     <property name="text">
-                     <string>Target LF</string>
+                     <string>LF permanent</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="1">
-                   <widget class="QLineEdit" name="target_LF">
+                  <item row="0" column="2">
+                   <widget class="QLabel" name="label_15">
+                    <property name="text">
+                     <string>LF variable</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="3">
+                   <widget class="QLineEdit" name="max_iter">
                     <property name="minimumSize">
                      <size>
                       <width>0</width>
@@ -728,7 +591,54 @@
                      </size>
                     </property>
                     <property name="text">
-                     <string>2.0</string>
+                     <string>20</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="2">
+                   <widget class="QLabel" name="label_8">
+                    <property name="text">
+                     <string>Max. Iter.</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="0">
+                   <widget class="QLabel" name="label_9">
+                    <property name="text">
+                     <string>Error</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="1">
+                   <widget class="QLineEdit" name="error">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>1.0e-2</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="3">
+                   <widget class="QLineEdit" name="relax">
+                    <property name="minimumSize">
+                     <size>
+                      <width>0</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>1.2</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="2">
+                   <widget class="QLabel" name="label_10">
+                    <property name="text">
+                     <string>Relax.</string>
                     </property>
                    </widget>
                   </item>
