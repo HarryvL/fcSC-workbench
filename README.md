@@ -69,7 +69,7 @@ fcSC imports (from) the following packages: numpy, scipy (version 1.11.3), numba
 Please refer to source code for in-line comments and to the FreeCAD forum (TBC)
 
 ### Current Limitations
-fcSC only works with 2nd order volumetric meshes generated with GMSH (10-noded tetrahedrals). 
+fcSC only works with 2nd order volumetric meshes generated with GMSH or Netgen (10-noded tetrahedrals). 
 
 ### Licence information
 
