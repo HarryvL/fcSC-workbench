@@ -1,30 +1,75 @@
-import numba as nb
+from PySide2.QtWidgets import QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, \
+    QLineEdit, QPushButton
+from PySide2.QtCore import Qt
+import sys
 
-@nb.njit
-def sorted_eigenvalues(vxx, vyy, vzz, vxy, vyz, vzx):
-    #assert v.shape == (3,3)
-    a, b, c, d, e, f = vxx, vyy, vzz, vxy, vzx, vyz # v[0,0], v[1,1], v[2,2], v[0,1], v[0,2], v[1,2]
 
-    # Analytic eigenvalues solution of the 3x3 input matrix
-    tmp1 = -a**2 + a*b + a*c - b**2 + b*c - c**2 - 3*d**2 - 3*e**2 - 3*f**2
-    tmp2 = 2*a**3 - 3*a**2*b - 3*a**2*c - 3*a*b**2 + 12*a*b*c - 3*a*c**2 + 9*a*d**2 + 9*a*e**2 - 18*a*f**2 + 2*b**3 - 3*b**2*c - 3*b*c**2 + 9*b*d**2 - 18*b*e**2 + 9*b*f**2 + 2*c**3 - 18*c*d**2 + 9*c*e**2 + 9*c*f**2 + 54*d*e*f
-    tmp3 = np.sqrt((4*tmp1**3 + tmp2**2) + 0j)
-    tmp4 = (tmp2 + tmp3) ** (1/3)
-    tmp5 = 1/3*(a + b + c)
-    tmp6 = 1 + 1j*np.sqrt(3)
-    tmp7 = 1 - 1j*np.sqrt(3)
-    eigv1 = tmp4/(3*2**(1/3)) - (2**(1/3)*tmp1)/(3*tmp4) + tmp5
-    eigv2 = (tmp6*tmp1)/(3*2**(2/3)*tmp4) - (tmp7*tmp4)/(6*2**(1/3)) + tmp5
-    eigv3 = (tmp7*tmp1)/(3*2**(2/3)*tmp4) - (tmp6*tmp4)/(6*2**(1/3)) + tmp5
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super(MainWindow, self).__init__()
 
-    # Assume the values are real ones and remove the FP rounding errors
-    eigv1 = np.real(eigv1)
-    eigv2 = np.real(eigv2)
-    eigv3 = np.real(eigv3)
+        self.setWindowTitle("Dynamic QTableWidget Example with Editable and Non-Editable Cells")
+        self.setGeometry(100, 100, 600, 400)
 
-    # Sort the eigenvalues using a fast sorting network
-    eigv1, eigv2 = min(eigv1, eigv2), max(eigv1, eigv2)
-    eigv2, eigv3 = min(eigv2, eigv3), max(eigv2, eigv3)
-    eigv1, eigv2 = min(eigv1, eigv2), max(eigv1, eigv2)
+        # Create a QTableWidget
+        self.table_widget = QTableWidget()
 
-    return eigv1, eigv2, eigv3
+        # Set initial column count
+        self.table_widget.setColumnCount(3)
+
+        # Set column headers
+        self.table_widget.setHorizontalHeaderLabels(['Column 1', 'Column 2', 'Column 3'])
+
+        # Layout to hold the table and button
+        layout = QVBoxLayout()
+        layout.addWidget(self.table_widget)
+
+        # Create a button to add new rows
+        self.add_row_button = QPushButton("Add Row")
+        self.add_row_button.clicked.connect(self.add_row)
+        layout.addWidget(self.add_row_button)
+
+        # Create a central widget and set the layout
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        # Dynamically populate the table
+        self.populate_table()
+
+    def populate_table(self):
+        data = [
+            ["Label1", "Input1", "Label2"],
+            ["Label3", "Input2", "Label4"],
+            ["Label5", "Input3", "Label6"]
+        ]
+
+        for row_data in data:
+            self.add_row(row_data)
+
+    def add_row(self, row_data=None):
+        if row_data is None:
+            # Default data for new row
+            row_data = ["New Label", "New Input", "New Label"]
+
+        row_index = self.table_widget.rowCount()
+        self.table_widget.insertRow(row_index)
+
+        for column_index, item in enumerate(row_data):
+            if column_index % 2 == 0:
+                # Non-editable cell (label)
+                table_item = QTableWidgetItem(item)
+                table_item.setFlags(table_item.flags() & ~Qt.ItemIsEditable)
+                self.table_widget.setItem(row_index, column_index, table_item)
+            else:
+                # Editable cell (user input)
+                line_edit = QLineEdit()
+                line_edit.setText(item)
+                self.table_widget.setCellWidget(row_index, column_index, line_edit)
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec_())

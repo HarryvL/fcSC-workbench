@@ -1240,6 +1240,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         iRiks = True
         pstep = 0
         pr_u(0)
+        lbd[step+1] = 0.0 # lbd now runs from 0.0 (target_LF_0) to 1.0 (target_LF)
         while pstep < nstep:
             step += 1
             pstep += 1
@@ -1250,7 +1251,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             if iRiks:
                 a = du.copy()  # a: Riks control vector
                 # print("np.linalg.norm(a)", np.linalg.norm(a))
-                a /= np.linalg.norm(a)
+                # a /= np.linalg.norm(a)
                 sig_old = sig_new.copy()
                 sigc_old = sigc_new.copy()
                 sigs_old = sigs_new.copy()
@@ -1435,7 +1436,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                         return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
 
                     restart += 1
-                    if step > 0:
+                    if step > 0 and (not update):
                         dl = (lbd[step] - lbd[step - 1]) / scale_re / restart
                         du = (disp_new - disp_old) / scale_re / restart
                     else:
@@ -1473,6 +1474,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 iRiks = False
                 # dl = target_LF_V - lbd[step]
                 dl = 1.0 - lbd[step]
+                # print("target load reached, dl = ", dl)
                 du = dl / (lbd[step + 1] - lbd[step]) * du
                 step -= 1
                 pstep -= 1
@@ -1504,9 +1506,6 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 # un.append(np.max(np.abs(disp_new)))
                 unp.append(disp_new[dof_max_p])
                 unv.append(disp_new[dof_max_v])
-                # update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, us_s, peeq, csr,
-                #                 triax,
-                #                 pressure, sigmises, ecr)
                 pressure = (sig_new[0::6] + sig_new[1::6] + sig_new[2::6]) / 3
                 epsccplot.append(np.max(epscc_new))
                 epsctplot.append(np.max(epsct_new))
@@ -1620,7 +1619,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         # du = dl * ue
 
         if update:
-            du = dl * ue
+            dl0 = dl
+            du = dl0 * ue
         #     step += 1
         #     lbd = np.append(lbd, 0.0)
         #     unp.append(unp[-1])
