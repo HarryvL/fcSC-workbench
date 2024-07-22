@@ -284,16 +284,17 @@ def setUpInput(doc, mesh, analysis):
                         prn_upd("No Faces with Pressure Loads")
 
         if obj.isDerivedFrom('Fem::ConstraintForce'):
+            print(obj.Label)
             if "(p)" in obj.Label or "(P)" in obj.Label:
                 perm = True
             else:
                 perm = False
             F = obj.Force
             d = obj.DirectionVector
+            N = 0
+            L = 0.0
+            A = 0.0
             for part, boundaries in obj.References:
-                N = 0
-                L = 0.0
-                A = 0.0
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
@@ -302,6 +303,8 @@ def setUpInput(doc, mesh, analysis):
                         L += ref.Length
                     else:
                         A += ref.Area
+            # print("A: ", A)
+            for part, boundaries in obj.References:
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
@@ -779,6 +782,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
                 iglob3 = 3 * iglob
                 load = shp[nl] * faceloads[face + 1] * abs(xsj) * gp6[index][2]
                 if floadtype[face + 1]:
+                    # print("face_load: ", faceloads[face + 1])
                     glv_P[iglob3:iglob3 + 3] += load
                 else:
                     glv_V[iglob3:iglob3 + 3] += load
@@ -2188,8 +2192,8 @@ def plot(fcVM, averaged, el_limit, ul_limit, unp, unv, lbdp, lbdv, epsccplot, ep
     callback.active = active_plot
     callback.strain = active_strain
 
-    rax2 = plt.axes([0.555, 0.9, 0.12, 0.08])
-    radio2 = RadioButtons(rax2, ["Concrete", "Steel"], active=callback.strain)
+    rax2 = plt.axes([0.555, 0.9, 0.15, 0.08])
+    radio2 = RadioButtons(rax2, ["Concrete", "Reinforcement"], active=callback.strain)
     callback.radio2 = radio2
     radio2.on_clicked(callback.select_strain)
     radio2.set_active(active_strain)
