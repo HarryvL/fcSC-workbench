@@ -1076,6 +1076,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     active_plot = 0  # permanent load
     active_strain = 0  # concrete compressive strain
 
+    update = False                 
+
     t0 = time.perf_counter()
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
