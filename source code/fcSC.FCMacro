@@ -83,10 +83,15 @@ try:
         averaged_option = f.readline().strip()
         model = int(f.readline().strip())
         target_LF_P = float(f.readline().strip())
+        num_mat_obj = int(f.readline().strip())
+        mat_obj = []
+        for i in range(num_mat_obj):
+            mat_obj.append([float(val) for val in str(f.readline().strip()).split()])
 
 except:
     print("file not found")
 
+# print(mat_obj)
 # extract information from FreeCAD objects
 Gui.updateGui()
 t0 = time.time()
@@ -101,6 +106,8 @@ elif return_code == 2:
     prn_upd("No mesh. Please generate mesh first")
 elif return_code == 3:
     prn_upd("No Analysis object. Please create one first")
+elif return_code == 4:
+    prn_upd("Not all elements belong to a material object")
 
 if return_code == 0:
     # prepare finite element input
@@ -108,115 +115,118 @@ if return_code == 0:
     t0 = time.time()
     (elNodes, noCoord, fix, fixdof, movdof, elMat, noce, loadFaces, pressure, loadvertices, vertexloads,
      loadedges, edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s,
-     ev) = ft.setUpInput(doc, mesh, analysis)
+     ev, return_code) = ft.setUpInput(doc, mesh, analysis, mat_obj)
 
-    t1 = time.time()
-    t[1] = t1 - t0
-    prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n")
-
-    # calculate the global stiffness matrix and global load vector
-    prn_upd("calculate the GSM and GLV\n")
-    t0 = time.time()
-    stm, row, col, glv_V, glv_P, modf, V, loadsumx_p, loadsumy_p, loadsumz_p, loadsumx_v, loadsumy_v, loadsumz_v, ne, nn, x = ft.calcGSM(
-        elNodes, noCoord, elMat, fix, grav_z, rhox, rhoy, rhoz, loadFaces, pressure, loadvertices,
-        vertexloads, loadedges,
-        edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev, model)
-
-    t1 = time.time()
-    t[2] = t1 - t0
-    prn_upd(f"calculate the GSM and GLV - time taken:  {t1 - t0:7.3f}  seconds\n")
-
-    # solve the global stiffness matrix equation
-    prn_upd("solve the global stiffness matrix equation\n")
-    Gui.updateGui()
-    t0 = time.time()
-
-    displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pdfcd = ft.calcDisp(
-        elNodes, noCoord, fixdof, movdof, modf, elMat,
-        stm, row, col, glv_V, glv_P, nstep, iterat_max,
-        error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
-        fcSC_window, target_LF_V, target_LF_P, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix, model)
-
-    t1 = time.time()
-    t[3] = t1 - t0
-    prn_upd(f"solve the global stiffness matrix equation - time taken:  {t1 - t0:7.3f}  seconds\n")
-
-    if not fail:
-        # map stresses to nodal points
-        prn_upd("map stresses and strains to nodal points\n")
-        t0 = time.time()
-        averaged = fcSC_window.averagedChk.isChecked()
-        tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = ft.mapStresses(averaged, elNodes,
-                                                                                              noCoord, stresses,
-                                                                                              epscc_new, epsct_new,
-                                                                                              sigmises, epss_new, noce,
-                                                                                              sig_yield, pdfcd)
+    if return_code == 4:
+        prn_upd("Not all elements belong to a material object")
+    else:
         t1 = time.time()
-        t[4] = t1 - t0
+        t[1] = t1 - t0
+        prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n")
 
-        prn_upd(f"map stresses to nodal points - time taken:  {t1 - t0:7.3f}  seconds\n")
-
-        # export results to VTK
-        prn_upd("export results to VTK\n")
+        # calculate the global stiffness matrix and global load vector
+        prn_upd("calculate the GSM and GLV\n")
         t0 = time.time()
-        VTKfile = os.path.join(mdir, "output files", name + '.vtk')
-        tet10rho = ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epscc, tet10epsct,
-                                tet10svm, tet10pdfcd, sig_yield, VTKfile)
-        t1 = time.time()
-        t[6] = t1 - t0
-        prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")
+        stm, row, col, glv_V, glv_P, modf, V, loadsumx_p, loadsumy_p, loadsumz_p, loadsumx_v, loadsumy_v, loadsumz_v, ne, nn, x = ft.calcGSM(
+            elNodes, noCoord, elMat, fix, grav_z, rhox, rhoy, rhoz, loadFaces, pressure, loadvertices,
+            vertexloads, loadedges,
+            edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev, model)
 
-        # paste results in the FEM result object
-        prn_upd("paste results in the FEM result object\n")
+        t1 = time.time()
+        t[2] = t1 - t0
+        prn_upd(f"calculate the GSM and GLV - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+        # solve the global stiffness matrix equation
+        prn_upd("solve the global stiffness matrix equation\n")
+        Gui.updateGui()
         t0 = time.time()
-        resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epscc, tet10rho)
+
+        displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pdfcd = ft.calcDisp(
+            elNodes, noCoord, fixdof, movdof, modf, elMat,
+            stm, row, col, glv_V, glv_P, nstep, iterat_max,
+            error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
+            fcSC_window, target_LF_V, target_LF_P, x, noce, rhox, rhoy, rhoz, a_c, a_s, ev, fix, model)
+
         t1 = time.time()
-        t[5] = t1 - t0
-        prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
+        t[3] = t1 - t0
+        prn_upd(f"solve the global stiffness matrix equation - time taken:  {t1 - t0:7.3f}  seconds\n")
 
-    timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
-             f"prepare finite element input................................... {t[1]:7.3f} seconds",
-             f"calculate the global stiffness matrix and global load vector... {t[2]:7.3f} seconds",
-             f"solve the global siffness matrix equation...................... {t[3]:7.3f} seconds",
-             f"map stresses to nodal points................................... {t[4]:7.3f} seconds",
-             f"paste results in the FEM result object......................... {t[5]:7.3f} seconds",
-             f"export results to VTK.......................................... {t[6]:7.3f} seconds"]
+        if not fail:
+            # map stresses to nodal points
+            prn_upd("map stresses and strains to nodal points\n")
+            t0 = time.time()
+            averaged = fcSC_window.averagedChk.isChecked()
+            tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = ft.mapStresses(averaged, elNodes,
+                                                                                                  noCoord, stresses,
+                                                                                                  epscc_new, epsct_new,
+                                                                                                  sigmises, epss_new, noce,
+                                                                                                  sig_yield, pdfcd)
+            t1 = time.time()
+            t[4] = t1 - t0
 
-    prn_upd("------------------------------ SUMMARY ------------------------------")
-    for entry in timer:
-        prn_upd(entry)
+            prn_upd(f"map stresses to nodal points - time taken:  {t1 - t0:7.3f}  seconds\n")
 
-    file_path = os.path.join(mdir, "output files", name + '.out')
+            # export results to VTK
+            prn_upd("export results to VTK\n")
+            t0 = time.time()
+            VTKfile = os.path.join(mdir, "output files", name + '.vtk')
+            tet10rho = ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epscc, tet10epsct,
+                                    tet10svm, tet10pdfcd, sig_yield, VTKfile)
+            t1 = time.time()
+            t[6] = t1 - t0
+            prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")
 
-    with open(file_path, "w") as f:
-        f.write("model name:{0: >30}\n".format(name))
-        f.write("No. of elements:{0: >25}\n".format(ne))
-        f.write("No. of Degrees of freedom:{0: >15}\n".format(nn))
-        f.write(
-            "\n=========================================================================================================================\n\n")
-        f.write("Sum of permanent loads\n")
-        f.write("x-direction: {0: >15.2e}\n".format(loadsumx_p))
-        f.write("y-direction: {0: >15.2e}\n".format(loadsumy_p))
-        f.write("z-direction: {0: >15.2e}\n\n".format(loadsumz_p))
-        f.write("Sum of variable loads\n")
-        f.write("x-direction: {0: >15.2e}\n".format(loadsumx_v))
-        f.write("y-direction: {0: >15.2e}\n".format(loadsumy_v))
-        f.write("z-direction: {0: >15.2e}\n".format(loadsumz_v))
-        f.write(
-            "\n=========================================================================================================================\n\n")
-        f.write(
-            "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}\n".format(
-                "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "eps_ct", "eps_s"))
-        for i in range(len(lbdp)):
+            # paste results in the FEM result object
+            prn_upd("paste results in the FEM result object\n")
+            t0 = time.time()
+            resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epscc, tet10rho)
+            t1 = time.time()
+            t[5] = t1 - t0
+            prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+        timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
+                 f"prepare finite element input................................... {t[1]:7.3f} seconds",
+                 f"calculate the global stiffness matrix and global load vector... {t[2]:7.3f} seconds",
+                 f"solve the global siffness matrix equation...................... {t[3]:7.3f} seconds",
+                 f"map stresses to nodal points................................... {t[4]:7.3f} seconds",
+                 f"paste results in the FEM result object......................... {t[5]:7.3f} seconds",
+                 f"export results to VTK.......................................... {t[6]:7.3f} seconds"]
+
+        prn_upd("------------------------------ SUMMARY ------------------------------")
+        for entry in timer:
+            prn_upd(entry)
+
+        file_path = os.path.join(mdir, "output files", name + '.out')
+
+        with open(file_path, "w") as f:
+            f.write("model name:{0: >30}\n".format(name))
+            f.write("No. of elements:{0: >25}\n".format(ne))
+            f.write("No. of Degrees of freedom:{0: >15}\n".format(nn))
             f.write(
-                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}\n'.format(
-                    lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], epsctplot[i], epssplot[i]))
+                "\n=========================================================================================================================\n\n")
+            f.write("Sum of permanent loads\n")
+            f.write("x-direction: {0: >15.2e}\n".format(loadsumx_p))
+            f.write("y-direction: {0: >15.2e}\n".format(loadsumy_p))
+            f.write("z-direction: {0: >15.2e}\n\n".format(loadsumz_p))
+            f.write("Sum of variable loads\n")
+            f.write("x-direction: {0: >15.2e}\n".format(loadsumx_v))
+            f.write("y-direction: {0: >15.2e}\n".format(loadsumy_v))
+            f.write("z-direction: {0: >15.2e}\n".format(loadsumz_v))
+            f.write(
+                "\n=========================================================================================================================\n\n")
+            f.write(
+                "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}\n".format(
+                    "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "eps_ct", "eps_s"))
+            for i in range(len(lbdp)):
+                f.write(
+                    '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}\n'.format(
+                        lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], epsctplot[i], epssplot[i]))
 
-        f.write(
-            "\n=========================================================================================================================\n\n")
+            f.write(
+                "\n=========================================================================================================================\n\n")
 
-    f.close()
+        f.close()
 
-    fcSC_window.progressBar.setValue(0)
-    fcSC_window.Step.setText("0")
-    fcSC_window.Load_Factor.setText("0.000")
+        fcSC_window.progressBar.setValue(0)
+        fcSC_window.Step.setText("0")
+        fcSC_window.Load_Factor.setText("0.000")

@@ -37,6 +37,7 @@ import dummySC
 import FreeCAD
 import FreeCADGui
 from PySide2 import QtWidgets, QtGui, QtCore
+from PySide2.QtWidgets import QTableWidgetItem
 
 global FCmw
 FCmw = FreeCADGui.getMainWindow()
@@ -86,32 +87,48 @@ class fcSCWorkbench(Workbench):
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
             self.doc = FreeCAD.newDocument("fcSC")
-
         self.file_name = self.doc.Label
-
         self.macro_file_path = os.path.join(self.dir_name, "source code", "fcSC.FCMacro")
-
         self.sum_file_path = os.path.join(self.dir_name, "source code", "fcSC_sum.FCMacro")
-
         self.disp_option = "incremental"
-
         self.eps_option = "eps_c"
-
         self.averaged_option = "unaveraged"
-
         self.model_option = "1"
+        self.mat_obj = {}
+        self.objID = {}
+        self.deleted_objs = []
 
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
                 self.workbench_instance = workbench_instance
 
+            def slotDeletedObject(self, obj):
+                #
+                # mat_obj = {App::MaterialObjectPython : [rhox, rhoy, rhoz, dx, dy, dz]}
+                #
+                # objID = {row : App::MaterialObjectPython}
+                #
+                self.workbench_instance.deleted_objs.append(obj.Label)
+                for row in self.workbench_instance.objID:
+                    if self.workbench_instance.objID[row] == obj:
+                        del self.workbench_instance.mat_obj[obj]
+                self.workbench_instance.check_mat_objs()
+                self.workbench_instance.update_material()
+
+            def slotChangedObject(self, obj, prop):
+                self.workbench_instance.update_material()
+
             def slotActivateDocument(self, doc):
                 if FreeCAD.activeDocument().Label[0:7] != "Unnamed":
-                    # print(self.workbench_instance.file_name)
                     self.workbench_instance.save_clicked()
                     self.workbench_instance.file_name = FreeCAD.activeDocument().Label
-                    # print(self.workbench_instance.file_name)
+                    self.workbench_instance.mat_obj = {}
+                    self.workbench_instance.objID = {}
+                    self.workbench_instance.deleted_objs = []
+                    self.workbench_instance.check_mat_objs()
                     self.workbench_instance.open_file()
+                    self.workbench_instance.update_material()
+
                     fcSC_window.eps_c.setText("0.000")
                     fcSC_window.eps_s.setText("0.000")
 
@@ -140,25 +157,14 @@ class fcSCWorkbench(Workbench):
 
         fcSC_window.max_iter.textChanged.connect(self.max_iter_changed)
         fcSC_window.relax.textChanged.connect(self.relax_changed)
-        # fcSC_window.scale_1.textChanged.connect(self.scale_1_changed)
-        # fcSC_window.scale_2.textChanged.connect(self.scale_2_changed)
-        # fcSC_window.scale_3.textChanged.connect(self.scale_3_changed)
-        fcSC_window.rho_x.textChanged.connect(self.rho_x_changed)
-        fcSC_window.rho_y.textChanged.connect(self.rho_y_changed)
-        fcSC_window.rho_z.textChanged.connect(self.rho_z_changed)
+        fcSC_window.tableWidget.cellChanged.connect(self.cell_changed)
 
         fcSC_window.fy.setValidator(double_validator)
         fcSC_window.fc.setValidator(double_validator)
-        fcSC_window.rho_x.setValidator(double_validator)
-        fcSC_window.rho_y.setValidator(double_validator)
-        fcSC_window.rho_z.setValidator(double_validator)
         fcSC_window.steps.setValidator(int_validator)
         fcSC_window.max_iter.setValidator(int_validator)
         fcSC_window.error.setValidator(double_validator)
         fcSC_window.relax.setValidator(double_validator)
-        # fcSC_window.scale_1.setValidator(double_validator)
-        # fcSC_window.scale_2.setValidator(double_validator)
-        # fcSC_window.scale_3.setValidator(double_validator)
         fcSC_window.target_LF_V.setValidator(double_validator)
         fcSC_window.target_LF_P.setValidator(double_validator)
 
@@ -181,13 +187,67 @@ class fcSCWorkbench(Workbench):
         self.eps_option_default = "eps_c"
         self.model_option_default = "1"
         self.averaged_Chk_default = "unaveraged"
+        self.dx_default = "10.0"
+        self.dy_default = "10.0"
+        self.dz_default = "10.0"
+        self.mat_values_default = [self.rho_x_default, self.rho_y_default, self.rho_z_default, self.dx_default,
+                                   self.dy_default, self.dz_default]
 
+        self.check_mat_objs()
         self.open_file()
+        self.update_material()
 
         FCmw.addDockWidget(QtCore.Qt.RightDockWidgetArea, fcSC_window.dw)
 
-    def Deactivated(self):
+    def check_mat_objs(self):
+        #
+        # mat_obj = {App::MaterialObjectPython : [rhox, rhoy, rhoz, dx, dy, dz]}
+        #
+        # objID = {row : App::MaterialObjectPython}
+        #
+        FreeCAD.ActiveDocument.recompute()
+        self.objID = {}
+        row = 0
+        for obj in FreeCAD.ActiveDocument.Objects:
+            if obj.TypeId == 'App::MaterialObjectPython' and obj.Label not in self.deleted_objs:
+                self.objID[row] = obj
+                row += 1
 
+    def update_material(self):
+        #
+        # mat_obj = {App::MaterialObjectPython : [rhox, rhoy, rhoz, dx, dy, dz]}
+        #
+        # objID = {row : App::MaterialObjectPython}
+        #
+        from PySide2.QtWidgets import QTableWidgetItem
+        from PySide2.QtGui import QFontMetrics
+        max_width = 0
+        tw = fcSC_window.tableWidget
+        font_metrics = QFontMetrics(tw.font())
+        tw.setRowCount(0)
+
+        for row in self.objID:
+            obj = self.objID[row]
+            tw.setRowCount(row + 1)
+            width = font_metrics.horizontalAdvance(obj.Label)
+            if width > max_width: max_width = width
+            if obj not in self.mat_obj:
+                self.mat_obj[obj] = self.mat_values_default
+            for field_index, field in enumerate(self.mat_obj[obj]):
+                item = QTableWidgetItem(field)
+                tw.setItem(row, field_index, item)
+
+        tw.verticalHeader().setFixedWidth(max_width + 10)
+
+        for row in self.objID:
+            if obj.Label not in self.deleted_objs:
+                tw.setVerticalHeaderItem(row, QTableWidgetItem(self.objID[row].Label))
+
+    def cell_changed(self, r, c):
+        self.mat_obj[self.objID[r]][c] = fcSC_window.tableWidget.item(r, c).text()
+
+    def Deactivated(self):
+        self.save_clicked()
         try:
             if fcSC_window.dw.isVisible():
                 fcSC_window.dw.setVisible(False)
@@ -209,8 +269,6 @@ class fcSCWorkbench(Workbench):
 
         FreeCADGui.Selection.clearSelection()
 
-        print(self.macro_file_path)
-
         fcSC_macro = open(self.macro_file_path).read()
         exec(fcSC_macro)
 
@@ -221,25 +279,19 @@ class fcSCWorkbench(Workbench):
         fcSC_window.max_iter.setText(self.max_iter_default)
         fcSC_window.error.setText(self.error_default)
         fcSC_window.relax.setText(self.relax_default)
-        # fcSC_window.scale_1.setText(self.scale_1_default)
-        # fcSC_window.scale_2.setText(self.scale_2_default)
-        # fcSC_window.scale_3.setText(self.scale_3_default)
-        # fcSC_window.relax.setPalette(self.palette_standard)
-        # fcSC_window.scale_1.setPalette(self.palette_standard)
-        # fcSC_window.scale_2.setPalette(self.palette_standard)
-        # fcSC_window.scale_3.setPalette(self.palette_standard)
         fcSC_window.incrRbtn.setChecked(True)
         fcSC_window.averagedChk.setChecked(False)
 
     def save_clicked(self):
         inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '_sc.inp')
+
         with open(inp_file_path, "w") as f:
             f.write(fcSC_window.fc.text() + "\n")
             f.write(fcSC_window.fy.text() + "\n")
             f.write(fcSC_window.GZinput.text() + "\n")
-            f.write(fcSC_window.rho_x.text() + "\n")
-            f.write(fcSC_window.rho_y.text() + "\n")
-            f.write(fcSC_window.rho_z.text() + "\n")
+            f.write(self.rho_x_default + "\n")
+            f.write(self.rho_y_default + "\n")
+            f.write(self.rho_z_default + "\n")
             f.write(fcSC_window.steps.text() + "\n")
             f.write(fcSC_window.max_iter.text() + "\n")
             f.write(fcSC_window.error.text() + "\n")
@@ -253,7 +305,11 @@ class fcSCWorkbench(Workbench):
             f.write(self.averaged_option + "\n")
             f.write(self.model_option + "\n")
             f.write(fcSC_window.target_LF_P.text() + "\n")
-
+            f.write(str(len(self.mat_obj)) + "\n")
+            for row in self.objID:
+                for prop in self.mat_obj[self.objID[row]]:
+                    f.write(prop + " ")
+                f.write("\n")
 
     def sum_clicked(self):
         fcSC_sum = open(self.sum_file_path).read()
@@ -263,16 +319,18 @@ class fcSCWorkbench(Workbench):
 
     def open_file(self):
         inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '_sc.inp')
-        # print("open_file")
+
+        # self.mat_obj = {key: self.mat_values_default for key in self.mat_obj}
+        self.deleted_objs = []
 
         try:
             with open(inp_file_path, "r") as f:
                 fcSC_window.fc.setText(str(f.readline().strip()))
                 fcSC_window.fy.setText(str(f.readline().strip()))
                 fcSC_window.GZinput.setText(str(f.readline().strip()))
-                fcSC_window.rho_x.setText(str(f.readline().strip()))
-                fcSC_window.rho_y.setText(str(f.readline().strip()))
-                fcSC_window.rho_z.setText(str(f.readline().strip()))
+                dummy = str(f.readline().strip())
+                dummy = str(f.readline().strip())
+                dummy = str(f.readline().strip())
                 fcSC_window.steps.setText(str(f.readline().strip()))
                 fcSC_window.max_iter.setText(str(f.readline().strip()))
                 fcSC_window.error.setText(str(f.readline().strip()))
@@ -301,23 +359,24 @@ class fcSCWorkbench(Workbench):
                     fcSC_window.target_LF_P.setText(self.target_LF_P_default)
                 else:
                     fcSC_window.target_LF_P.setText(LFinp_P)
+                f.readline().strip()
 
+                for row in self.objID:
+                    values = str(f.readline().strip())
+                    if values:
+                        self.mat_obj[self.objID[row]] = values.split()
+                    else:
+                        self.mat_obj[self.objID[row]] = self.mat_values_default
 
 
         except FileNotFoundError:
             fcSC_window.fc.setText(self.fc_default)
             fcSC_window.fy.setText(self.fy_default)
             fcSC_window.GZinput.setText(self.GZinput_default)
-            fcSC_window.rho_x.setText(self.rho_x_default)
-            fcSC_window.rho_y.setText(self.rho_y_default)
-            fcSC_window.rho_z.setText(self.rho_z_default)
             fcSC_window.steps.setText(self.steps_default)
             fcSC_window.max_iter.setText(self.max_iter_default)
             fcSC_window.error.setText(self.error_default)
             fcSC_window.relax.setText(self.relax_default)
-            # fcSC_window.scale_1.setText(self.scale_1_default)
-            # fcSC_window.scale_2.setText(self.scale_2_default)
-            # fcSC_window.scale_3.setText(self.scale_3_default)
             fcSC_window.incrRbtn.setChecked(True)
             fcSC_window.target_LF_V.setText(self.target_LF_V_default)
             fcSC_window.averagedChk.setChecked(False)
@@ -341,82 +400,6 @@ class fcSCWorkbench(Workbench):
             fcSC_window.relax.setPalette(self.palette_warning)
         else:
             fcSC_window.relax.setPalette(self.palette_standard)
-
-    # def scale_1_changed(self):
-    #     if (fcSC_window.scale_1.text() != self.scale_1_default):
-    #         if fcSC_window.scale_1.text() == "":
-    #             fcSC_window.scale_1.setText("0.0")
-    #         if float(fcSC_window.scale_1.text()) > 3.0:
-    #             fcSC_window.scale_1.setText("3.0")
-    #         elif float(fcSC_window.scale_1.text()) < 1.0:
-    #             fcSC_window.scale_1.setText("1.0")
-    #         fcSC_window.scale_1.setPalette(self.palette_warning)
-    #     else:
-    #         fcSC_window.scale_1.setPalette(self.palette_standard)
-    #
-    # def scale_2_changed(self):
-    #     if (fcSC_window.scale_2.text() != self.scale_2_default):
-    #         if fcSC_window.scale_2.text() == "":
-    #             fcSC_window.scale_2.setText("0.0")
-    #         if float(fcSC_window.scale_2.text()) > 2.0:
-    #             fcSC_window.scale_2.setText("2.0")
-    #         elif float(fcSC_window.scale_2.text()) < 1.0:
-    #             fcSC_window.scale_2.setText("1.0")
-    #         fcSC_window.scale_2.setPalette(self.palette_warning)
-    #     else:
-    #         fcSC_window.scale_2.setPalette(self.palette_standard)
-    #
-    # def scale_3_changed(self):
-    #     if fcSC_window.scale_3.text() == "":
-    #         fcSC_window.scale_3.setText("0.0")
-    #     if (fcSC_window.scale_3.text() != self.scale_3_default):
-    #         if float(fcSC_window.scale_3.text()) > 2.0:
-    #             fcSC_window.scale_3.setText("2.0")
-    #         elif float(fcSC_window.scale_3.text()) < 1.0:
-    #             fcSC_window.scale_3.setText("1.0")
-    #         fcSC_window.scale_3.setPalette(self.palette_warning)
-    #     else:
-    #         fcSC_window.scale_3.setPalette(self.palette_standard)
-
-    def rho_x_changed(self):
-        try:
-            rx = float(fcSC_window.rho_x.text())
-        except ValueError:
-            rx = 0.0
-        if rx < 0.0:
-            fcSC_window.rho_x.setText(self.rho_x_default)
-            rx = float(self.rho_x_default)
-        if rx < float(self.rho_x_default):
-            fcSC_window.rho_x.setPalette(self.palette_warning)
-        else:
-            fcSC_window.rho_x.setPalette(self.palette_standard)
-
-    def rho_y_changed(self):
-        try:
-            ry = float(fcSC_window.rho_y.text())
-        except ValueError:
-            ry = 0.0
-        if ry < 0.0:
-            fcSC_window.rho_y.setText(self.rho_y_default)
-            ry = float(self.rho_y_default)
-        if ry < float(self.rho_y_default):
-            fcSC_window.rho_y.setPalette(self.palette_warning)
-        else:
-            fcSC_window.rho_y.setPalette(self.palette_standard)
-
-    def rho_z_changed(self):
-        try:
-            rz = float(fcSC_window.rho_z.text())
-        except ValueError:
-            rz = 0.0
-        if rz < 0.0:
-            fcSC_window.rho_z.setText(self.rho_z_default)
-            rz = float(self.rho_z_default)
-        if rz < float(self.rho_z_default):
-            fcSC_window.rho_z.setPalette(self.palette_warning)
-        else:
-            fcSC_window.rho_z.setPalette(self.palette_standard)
-
 
     def btn_state(self):
         if fcSC_window.totalRbtn.isChecked():

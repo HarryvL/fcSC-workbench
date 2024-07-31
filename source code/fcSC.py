@@ -117,7 +117,8 @@ def setUpAnalysis():
     return doc, mesh, analysis, return_code
 
 
-def setUpInput(doc, mesh, analysis):
+def setUpInput(doc, mesh, analysis, mat_obj):
+    return_code = 0
     solver = doc.getObject("SolverCcxTools")
     member = membertools.AnalysisMember(analysis)
 
@@ -154,6 +155,7 @@ def setUpInput(doc, mesh, analysis):
     else:
         element_sets = [es["FEMElements"] for es in member.mats_linear]
 
+    # print("element_sets: ", element_sets)
     matCon = {}  # BooleanFragment Primitive the material object refers to
     ppEl = {}  # BooleanFragment Primitive element El belongs to
     materialbyElement = []  # see further
@@ -167,9 +169,15 @@ def setUpInput(doc, mesh, analysis):
         prn_upd("Material Object: ", matobject['Object'].Name, "   E= ", E, "   Nu= ", Nu, "   Density= ", Density)
         for el in element_sets[indm]:  # element_sets[indm]: all elements with material indm
             if matCon: ppEl[el] = matCon[indm]  # ppEl[el]: primitive el belongs to
-            materialbyElement.append([E, Nu, Density])  # materialbyElement[elementIndex] = [E, Nu, Density]
+            materialbyElement.append(
+                [E, Nu, Density] + mat_obj[indm])  # materialbyElement[elementIndex] = [E, Nu, Density]
 
     materialbyElement = np.asarray(materialbyElement)
+
+    if (len(mesh.FemMesh.Volumes) != len(materialbyElement)):
+        print("number of elements in mesh:", len(mesh.FemMesh.Volumes))
+        print("number of elements with material properties:", len(materialbyElement))
+        return_code = 4
 
     noce = np.zeros((len(nocoord)), dtype=np.int16)
     for i in net:
@@ -284,7 +292,7 @@ def setUpInput(doc, mesh, analysis):
                         prn_upd("No Faces with Pressure Loads")
 
         if obj.isDerivedFrom('Fem::ConstraintForce'):
-            print(obj.Label)
+            # print(obj.Label)
             if "(p)" in obj.Label or "(P)" in obj.Label:
                 perm = True
             else:
@@ -354,7 +362,7 @@ def setUpInput(doc, mesh, analysis):
             loadfaces, pressure,
             loadvertices, vertexloads,
             loadedges, edgeloads,
-            loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev)
+            loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev, return_code)
 
 
 # shape functions for a 4-node tetrahedron - only used for stress interpolation
@@ -764,6 +772,8 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
         if len(loadfaces_uni) == 1:
             break
 
+        # print("face_load: ", faceloads[face + 1])
+
         nda = loadfaces_uni[face + 1]  # node numbers of loaded face
         for i in range(3):
             for j in range(6):
@@ -782,7 +792,6 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
                 iglob3 = 3 * iglob
                 load = shp[nl] * faceloads[face + 1] * abs(xsj) * gp6[index][2]
                 if floadtype[face + 1]:
-                    # print("face_load: ", faceloads[face + 1])
                     glv_P[iglob3:iglob3 + 3] += load
                 else:
                     glv_V[iglob3:iglob3 + 3] += load
@@ -820,11 +829,17 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
 
     V = 0.0
 
-    density = materialbyElement[0][2]
-
     for el, nodes in enumerate(elNodes):
         esm = np.zeros((30, 30), dtype=np.float64)
         gamma = np.zeros((30), dtype=np.float64)
+
+        Es = 210000.0
+        Ec = materialbyElement[el][0]
+        density = materialbyElement[el][2]
+
+        rhox = materialbyElement[el][3]
+        rhoy = materialbyElement[el][4]
+        rhoz = materialbyElement[el][5]
 
         # set up nodal values for this element
         for i in range(3):
@@ -840,12 +855,10 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
             #              np.array(3 * [1.0]), np.array(6 * [1.0]), rhox, rhoy, rhoz, 210000.0)
 
             dmatc = np.zeros((6, 6), dtype=np.float64)
-            Ec = materialbyElement[el][0]
             dmatc[0][0] = dmatc[1][1] = dmatc[2][2] = Ec
             dmatc[3][3] = dmatc[4][4] = dmatc[5][5] = Ec / 2.0
 
             dmats = np.zeros((6, 6), dtype=np.float64)
-            Es = 210000.0
             dmats[0, 0] = rhox * Es
             dmats[1, 1] = rhoy * Es
             dmats[2, 2] = rhoz * Es
@@ -919,7 +932,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
         loadsumy_v += glv_V[dof + 1]
         loadsumz_v += glv_V[dof + 2]
 
-    print("mesh volume", V)
+    print("mesh volume", V, "\n")
     print("permanent loads:")
     print("loadsumx", loadsumx_p)
     print("loadsumy", loadsumy_p)
@@ -1076,6 +1089,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     active_plot = 0  # permanent load
     active_strain = 0  # concrete compressive strain
 
+    update = False
+
     t0 = time.perf_counter()
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
@@ -1184,8 +1199,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     # dof_max = np.argmax(np.abs(uev))
     dof_max_p = np.argmax(np.abs(uep))
     dof_max_v = np.argmax(np.abs(uev))
-    print("dof_max_p: ", dof_max_p)
-    print("dof_max_v: ", dof_max_v)
+    # print("dof_max_p: ", dof_max_p)
+    # print("dof_max_v: ", dof_max_v)
 
     unp = [0.]
     unv = [0.]
@@ -1244,7 +1259,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         iRiks = True
         pstep = 0
         pr_u(0)
-        lbd[step+1] = 0.0 # lbd now runs from 0.0 (target_LF_0) to 1.0 (target_LF)
+        lbd[step + 1] = 0.0  # lbd now runs from 0.0 (target_LF_0) to 1.0 (target_LF)
         while pstep < nstep:
             step += 1
             pstep += 1
@@ -1746,7 +1761,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, unp, unv, lbdp, lbdv, epsccplot, ep
             # plt.draw()
 
         def select_strain(self, label):
-            if self.active == 0: # permanent load
+            if self.active == 0:  # permanent load
                 lbd = lbdp
                 un = unp
             else:
@@ -2145,12 +2160,12 @@ def plot(fcVM, averaged, el_limit, ul_limit, unp, unv, lbdp, lbdv, epsccplot, ep
     ax[0].set(xlabel='displacement [mm]', ylabel='load factor [-] or load [N]', title='')
     strain_plot, = ax[1].plot(epsccplot, lbdp, '-ok')
     ax[1].set(xlabel='concrete plastic compressive strain [-]', title='')
-    callback.load_def_limit_1, = ax[0].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
-    callback.load_def_limit_2, = ax[0].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
-    callback.load_def_limit_3, = ax[0].plot([0,0, 0,0], [0,0, 0,0], color='b', linestyle="--")
-    callback.strain_plot_limit_1, = ax[1].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
-    callback.strain_plot_limit_2, = ax[1].plot([0,0, 0,0], [0,0, 0,0], color='r', linestyle="--")
-    callback.strain_plot_limit_3, = ax[1].plot([0,0, 0,0], [0,0, 0,0], color='b', linestyle="--")
+    callback.load_def_limit_1, = ax[0].plot([0, 0, 0, 0], [0, 0, 0, 0], color='r', linestyle="--")
+    callback.load_def_limit_2, = ax[0].plot([0, 0, 0, 0], [0, 0, 0, 0], color='r', linestyle="--")
+    callback.load_def_limit_3, = ax[0].plot([0, 0, 0, 0], [0, 0, 0, 0], color='b', linestyle="--")
+    callback.strain_plot_limit_1, = ax[1].plot([0, 0, 0, 0], [0, 0, 0, 0], color='r', linestyle="--")
+    callback.strain_plot_limit_2, = ax[1].plot([0, 0, 0, 0], [0, 0, 0, 0], color='r', linestyle="--")
+    callback.strain_plot_limit_3, = ax[1].plot([0, 0, 0, 0], [0, 0, 0, 0], color='b', linestyle="--")
 
     ax[0].grid()
     ax[1].grid()
@@ -2247,8 +2262,8 @@ def plot(fcVM, averaged, el_limit, ul_limit, unp, unv, lbdp, lbdv, epsccplot, ep
             break
 
     return (
-    callback.cnt, callback.dl, callback.du, callback.target_LF_P_0, callback.target_LF_V_0, callback.target_LF_P,
-    callback.target_LF_V, callback.update, callback.active, callback.strain)
+        callback.cnt, callback.dl, callback.du, callback.target_LF_P_0, callback.target_LF_V_0, callback.target_LF_P,
+        callback.target_LF_V, callback.update, callback.active, callback.strain)
 
 
 # update PEEQ and CSR
@@ -2352,6 +2367,13 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
     first = True
 
     for el, nodes in enumerate(elNodes):
+        Es = 210000.0
+        Ec = materialbyElement[el][0]
+
+        rhox = materialbyElement[el][3]
+        rhoy = materialbyElement[el][4]
+        rhoz = materialbyElement[el][5]
+
         for i, nd in enumerate(nodes):
             co = nocoord[nd - 1]
             xlv0[i] = co[0]
@@ -2495,12 +2517,10 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
             # print("eps: ", eps)
 
             dmatc = np.zeros((6, 6), dtype=np.float64)
-            Ec = materialbyElement[el][0]
             dmatc[0][0] = dmatc[1][1] = dmatc[2][2] = Ec
             dmatc[3][3] = dmatc[4][4] = dmatc[5][5] = Ec / 2.0
 
             dmats = np.zeros((6, 6), dtype=np.float64)
-            Es = 210000.0
             dmats[0, 0] = rhox * Es
             dmats[1, 1] = rhoy * Es
             dmats[2, 2] = rhoz * Es
@@ -2537,10 +2557,9 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
 
             if model == 2:
                 sigc_update[ipos2:ipos2 + 6] = sxx, syy, szz, sxy, syz, szx
-                # ignore steel in compression
-                sxxs = min(rhox * sy, max(sigs_test[0], 0.0))
-                syys = min(rhoy * sy, max(sigs_test[1], 0.0))
-                szzs = min(rhoz * sy, max(sigs_test[2], 0.0))
+                sxxs = min(rhox * sy, max(sigs_test[0], -rhox * sy))
+                syys = min(rhoy * sy, max(sigs_test[1], -rhoy * sy))
+                szzs = min(rhoz * sy, max(sigs_test[2], -rhoz * sy))
                 sxx += sxxs
                 syy += syys
                 szz += szzs
@@ -2633,10 +2652,10 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn, 
         fy2 = (rhox * psdir[0, 1] ** 2 + rhoy * psdir[1, 1] ** 2 + rhoz * psdir[2, 1] ** 2) * sig_yield
         fy3 = (rhox * psdir[0, 2] ** 2 + rhoy * psdir[1, 2] ** 2 + rhoz * psdir[2, 2] ** 2) * sig_yield
 
-        # ignore steel in compression and concrete in tension
-        psr1 = min(fy1, max(ps1, -fcd))
-        psr2 = min(fy2, max(ps2, -fcd))
-        psr3 = min(fy3, max(ps3, -fcd))
+        # ignore concrete in tension
+        psr1 = min(fy1, max(ps1, -fcd - rhox * sig_yield))
+        psr2 = min(fy2, max(ps2, -fcd - rhoy * sig_yield))
+        psr3 = min(fy3, max(ps3, -fcd - rhoz * sig_yield))
 
         # plastic compressive strain increments concrete
         dl1 = -min((ps1 - psr1) / E, 0.0)
@@ -2684,7 +2703,7 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn, 
 
         # equivalent plastic compressive strain increment concrete
         # depsc = np.sqrt(2 / 3 * (dl1 ** 2 + dl2 ** 2 + dl3 ** 2))
-        depsc = max(dl1, dl2, dl3)
+        depscc = max(dl1, dl2, dl3)
 
         depss = 0.0
 
