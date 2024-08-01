@@ -181,7 +181,7 @@ class fcSCWorkbench(Workbench):
         self.scale_1_default = "2.0"
         self.scale_2_default = "1.2"
         self.scale_3_default = "1.2"
-        self.target_LF_V_default = "2.0"
+        self.target_LF_V_default = "0.0"
         self.target_LF_P_default = "1.0"
         self.disp_option_default = "incremental"
         self.eps_option_default = "eps_c"

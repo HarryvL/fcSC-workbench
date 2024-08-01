@@ -2653,9 +2653,9 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn, 
         fy3 = (rhox * psdir[0, 2] ** 2 + rhoy * psdir[1, 2] ** 2 + rhoz * psdir[2, 2] ** 2) * sig_yield
 
         # ignore concrete in tension
-        psr1 = min(fy1, max(ps1, -fcd - rhox * sig_yield))
-        psr2 = min(fy2, max(ps2, -fcd - rhoy * sig_yield))
-        psr3 = min(fy3, max(ps3, -fcd - rhoz * sig_yield))
+        psr1 = min(fy1, max(ps1, -fcd - fy1))
+        psr2 = min(fy2, max(ps2, -fcd - fy2))
+        psr3 = min(fy3, max(ps3, -fcd - fy3))
 
         # plastic compressive strain increments concrete
         dl1 = -min((ps1 - psr1) / E, 0.0)
