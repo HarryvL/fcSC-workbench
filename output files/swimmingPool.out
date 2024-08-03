@@ -1,24 +1,24 @@
-model name:                 wall_tutorial
-No. of elements:                     4012
-No. of Degrees of freedom:           7916
+model name:                  swimmingPool
+No. of elements:                    43386
+No. of Degrees of freedom:          84998
 
 =========================================================================================================================
 
 Sum of permanent loads
 x-direction:        0.00e+00
 y-direction:        0.00e+00
-z-direction:       -3.09e+04
+z-direction:       -5.60e+05
 
 Sum of variable loads
 x-direction:        0.00e+00
 y-direction:        0.00e+00
-z-direction:       -1.00e+06
+z-direction:       -2.80e+04
 
 =========================================================================================================================
 
      lbd_p    disp_p     lbd_v    disp_v     p/fcd    eps_cc   ip_cc    eps_ct     eps_s   ip_cc
   0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00       0  0.00e+00  0.00e+00       0
-  1.00e+00  1.12e-02  1.00e+00  4.33e-01  0.00e+00  0.00e+00       0  0.00e+00  0.00e+00       0
+  1.00e+00  5.03e-01  0.00e+00  4.34e-01  0.00e+00  0.00e+00       0  0.00e+00  0.00e+00       0
 
 =========================================================================================================================
 

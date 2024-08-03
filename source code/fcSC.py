@@ -701,7 +701,7 @@ def gaussPoints():
 @jit(nopython=True, cache=True)
 def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, loadfaces, pressure,
             loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype,
-            floadtype, a_c, a_s, ev, model):
+            floadtype, a_c, a_s, ev, model, nstep):
     gp10, gp6, gp2 = gaussPoints()
     ne = len(elNodes)  # number of volume elements
     # nn = len(nocoord[:, 0])  # number of degrees of freedom
@@ -833,7 +833,10 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
         esm = np.zeros((30, 30), dtype=np.float64)
         gamma = np.zeros((30), dtype=np.float64)
 
-        Es = 210000.0
+        if float(nstep) == 1.0:
+            Es = 0.0
+        else:
+            Es = 210000.0
         Ec = materialbyElement[el][0]
         density = materialbyElement[el][2]
 
@@ -1181,7 +1184,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, ue, sig_old, sig_new,
                            sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old,
                            epss_new, sig_test,
-                           qelastic, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0, model)
+                           qelastic, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0, model, nstep)
 
         qelastic *= movdof
         qelnorm = np.linalg.norm(qelastic)
@@ -1205,8 +1208,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     unp = [0.]
     unv = [0.]
     epsccplot = [0.]
+    maxloc_epscc = [0]
     epsctplot = [0.]
     epssplot = [0.]
+    maxloc_epss = [0]
     crip = [0]
     pplot = [0.]
     svmplot = [0.]
@@ -1231,13 +1236,28 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         epsctplot.append(0.0)
         epssplot.append(0.0)
         pdfcdplot.append(0.0)
+        maxloc_epscc.append(0)
+        maxloc_epss.append(0)
         qin = np.zeros(3 * len(nocoord), dtype=np.float64)
         sig_yield *= 1.0e6
         fcd *= 1.0e6
         update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, disp_new, sig_old, sig_new,
                            sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new, epss_old,
                            epss_new, sig_test,
-                           qin, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0, model)
+                           qin, rhox, rhoy, rhoz, a_c, a_s, ev, 0, 0, model, nstep)
+
+        prn_upd("max sxx: {0:>11.4e}".format(max(sig_new[0::6])))
+        prn_upd("min sxx: {0:>11.4e}".format(min(sig_new[0::6])))
+        prn_upd("max syy: {0:>11.4e}".format(max(sig_new[1::6])))
+        prn_upd("min syy: {0:>11.4e}".format(min(sig_new[1::6])))
+        prn_upd("max szz: {0:>11.4e}".format(max(sig_new[2::6])))
+        prn_upd("min szz: {0:>11.4e}".format(min(sig_new[2::6])))
+        prn_upd("max sxy: {0:>11.4e}".format(max(sig_new[3::6])))
+        prn_upd("min sxy: {0:>11.4e}".format(min(sig_new[3::6])))
+        prn_upd("max sxz: {0:>11.4e}".format(max(sig_new[4::6])))
+        prn_upd("min sxz: {0:>11.4e}".format(min(sig_new[4::6])))
+        prn_upd("max syz: {0:>11.4e}".format(max(sig_new[5::6])))
+        prn_upd("min syz: {0:>11.4e}".format(min(sig_new[5::6])))
 
         cnt = False
 
@@ -1299,7 +1319,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new,
                                epss_old, epss_new, sig_test,
                                qin, rhox, rhoy, rhoz, a_c, a_s, ev,
-                               step, iterat, model)
+                               step, iterat, model, nstep)
 
             # print("sig_new_max: ", np.max(sig_new))
 
@@ -1422,7 +1442,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                    sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new, epsct_new,
                                    epss_old, epss_new,
                                    sig_test, qin, rhox, rhoy, rhoz, a_c, a_s,
-                                   ev, step, iterat, model)
+                                   ev, step, iterat, model, nstep)
 
                 # print("norm(qin): ", np.linalg.norm(qin))
 
@@ -1452,7 +1472,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     if restart == 4:
                         print("MAXIMUM RESTARTS REACHED")
                         fail = True
-                        return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
+
+                        return (disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip,
+                                peeqplot, pplot, svmplot, pdfcdplot, epsccplot, maxloc_epscc, epsctplot, epssplot,
+                                maxloc_epss, fail, pressure / fcd)
 
                     restart += 1
                     if step > 0 and (not update):
@@ -1470,7 +1493,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                        sigc_old, sigc_new, sigs_old, sigs_new, epscc_old, epsct_old, epscc_new,
                                        epsct_new, epss_old, epss_new,
                                        sig_test, qin, rhox, rhoy, rhoz, a_c,
-                                       a_s, ev, step, iterat, model)
+                                       a_s, ev, step, iterat, model, nstep)
 
                     # r = fixdof * (lbd[step + 1] * (glv_V + modf) - qin)
 
@@ -1527,8 +1550,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 unv.append(disp_new[dof_max_v])
                 pressure = (sig_new[0::6] + sig_new[1::6] + sig_new[2::6]) / 3
                 epsccplot.append(np.max(epscc_new))
+                maxloc_epscc.append(np.argmax(epscc_new))
                 epsctplot.append(np.max(epsct_new))
                 epssplot.append(np.max(epss_new))
+                maxloc_epss.append(np.argmax(epss_new))
                 pdfcdplot.append(np.min(pressure / fcd))
 
                 EC_u(str(round(max(epscc_new), 3)))
@@ -1547,26 +1572,30 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         prn_upd("\n***************************** Progress Report Step: {} *****************************".format(step))
 
         print(
-            '{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}'.format(
+            '{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >8}{7: >10}{8: >10}{9: >8}'.format(
                 "lbd_p",
                 "disp_p",
                 "lbd_v",
                 "disp_v",
                 "p/fcd",
                 "eps_cc",
+                "ip_cc",
                 "eps_ct",
-                "eps_s"))
+                "eps_s",
+                "ip_s"))
         for i in range(len(lout)):
             print(
-                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}'.format(
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >8}{7: >10.2e}{8: >10.2e}{9: >8}'.format(
                     lbdp[i],
                     unp[i],
                     lbdv[i],
                     unv[i],
                     pdfcdplot[i],
                     epsccplot[i],
+                    maxloc_epscc[i],
                     epsctplot[i],
-                    epssplot[i]))
+                    epssplot[i],
+                    maxloc_epss[i]))
 
         us_c = 0.0035
         us_s = 0.025
@@ -1666,9 +1695,14 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                                                                                 u_out))
 
     if disp_output == "total":
-        return disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
+        return (
+            disp_new, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot,
+            svmplot, pdfcdplot, epsccplot, maxloc_epscc, epsctplot, epssplot, maxloc_epss, fail, pressure / fcd)
     else:
-        return disp_new - disp_old, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pressure / fcd
+        return (
+            disp_new - disp_old, sig_new, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip,
+            peeqplot,
+            pplot, svmplot, pdfcdplot, epsccplot, maxloc_epscc, epsctplot, epssplot, maxloc_epss, fail, pressure / fcd)
 
 
 # plot the load-deflection curve
@@ -2330,7 +2364,7 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, us_s
 def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield, du, sig, sig_update,
                        sigc, sigc_update, sigs, sigs_update, epscc, epsct, epscc_update, epsct_update, epss,
                        epss_update, sig_test_global,
-                       qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat, model):
+                       qin, rhox, rhoy, rhoz, a_c, a_s, ev, step, iterat, model, nstep):
     # print("-------------------------update_stress_load-------------------------")
     u10 = np.empty(30, dtype=np.float64)  # displacements for the 10 tetrahedral nodes
     sig_test = np.empty(6, dtype=np.float64)
@@ -2367,12 +2401,16 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
     first = True
 
     for el, nodes in enumerate(elNodes):
-        Es = 210000.0
-        Ec = materialbyElement[el][0]
+        if float(nstep) == 1.0:
+            Es = 0.0
+            rhox = rhoy = rhoz = 0.0
+        else:
+            Es = 210000.0
+            rhox = materialbyElement[el][3]
+            rhoy = materialbyElement[el][4]
+            rhoz = materialbyElement[el][5]
 
-        rhox = materialbyElement[el][3]
-        rhoy = materialbyElement[el][4]
-        rhoz = materialbyElement[el][5]
+        Ec = materialbyElement[el][0]
 
         for i, nd in enumerate(nodes):
             co = nocoord[nd - 1]
@@ -2553,7 +2591,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
             prn = False
 
             sxx, syy, szz, sxy, syz, szx, psdir, act_c, act_s, depscc, depsct, depss = concrete(
-                sig_test, rhox, rhoy, rhoz, fcd, sy, 0.0, step, iterat, prn, Ec, model)
+                sig_test, rhox, rhoy, rhoz, fcd, sy, 0.0, step, iterat, prn, Ec, model, nstep)
 
             if model == 2:
                 sigc_update[ipos2:ipos2 + 6] = sxx, syy, szz, sxy, syz, szx
@@ -2640,7 +2678,7 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
 
 @jit(nopython=True, cache=True, nogil=True)
-def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn, E, model):
+def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn, E, model, nstep):
     a_c = np.array(3 * [0])
     a_s = np.array(3 * [1.0])
 
@@ -2707,7 +2745,11 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, nu, step, iterat, prn, 
 
         depss = 0.0
 
-    sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = cartesian(psr1, psr2, psr3, psdir)
+    if float(nstep) == 1.0:
+        sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = sig_test[0], sig_test[1], sig_test[2], sig_test[3], sig_test[
+            4], sig_test[5]
+    else:
+        sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = cartesian(psr1, psr2, psr3, psdir)
 
     return sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx, psdir, a_c, a_s, depscc, depsct, depss
 

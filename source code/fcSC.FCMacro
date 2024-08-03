@@ -130,7 +130,7 @@ if return_code == 0:
         stm, row, col, glv_V, glv_P, modf, V, loadsumx_p, loadsumy_p, loadsumz_p, loadsumx_v, loadsumy_v, loadsumz_v, ne, nn, x = ft.calcGSM(
             elNodes, noCoord, elMat, fix, grav_z, rhox, rhoy, rhoz, loadFaces, pressure, loadvertices,
             vertexloads, loadedges,
-            edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev, model)
+            edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s, ev, model, nstep)
 
         t1 = time.time()
         t[2] = t1 - t0
@@ -141,7 +141,7 @@ if return_code == 0:
         Gui.updateGui()
         t0 = time.time()
 
-        displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, epsctplot, epssplot, fail, pdfcd = ft.calcDisp(
+        displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, maxloc_epscc, epsctplot, epssplot, maxloc_epss, fail, pdfcd = ft.calcDisp(
             elNodes, noCoord, fixdof, movdof, modf, elMat,
             stm, row, col, glv_V, glv_P, nstep, iterat_max,
             error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
@@ -159,7 +159,8 @@ if return_code == 0:
             tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = ft.mapStresses(averaged, elNodes,
                                                                                                   noCoord, stresses,
                                                                                                   epscc_new, epsct_new,
-                                                                                                  sigmises, epss_new, noce,
+                                                                                                  sigmises, epss_new,
+                                                                                                  noce,
                                                                                                   sig_yield, pdfcd)
             t1 = time.time()
             t[4] = t1 - t0
@@ -215,12 +216,13 @@ if return_code == 0:
             f.write(
                 "\n=========================================================================================================================\n\n")
             f.write(
-                "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}\n".format(
-                    "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "eps_ct", "eps_s"))
+                "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >8}{7: >10}{8: >10}{9: >8}\n".format(
+                    "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "ip_cc", "eps_ct", "eps_s", "ip_cc"))
             for i in range(len(lbdp)):
                 f.write(
-                    '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}\n'.format(
-                        lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], epsctplot[i], epssplot[i]))
+                    '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >8}{7: >10.2e}{8: >10.2e}{9: >8}\n'.format(
+                        lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], maxloc_epscc[i], epsctplot[i],
+                        epssplot[i], maxloc_epss[i]))
 
             f.write(
                 "\n=========================================================================================================================\n\n")

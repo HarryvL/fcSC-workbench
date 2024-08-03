@@ -1,24 +1,24 @@
-model name:                 wall_tutorial
-No. of elements:                     4012
-No. of Degrees of freedom:           7916
+model name:               LGH_3002_beam_2
+No. of elements:                      682
+No. of Degrees of freedom:           1383
 
 =========================================================================================================================
 
 Sum of permanent loads
 x-direction:        0.00e+00
-y-direction:        0.00e+00
-z-direction:       -3.09e+04
+y-direction:        1.92e-09
+z-direction:       -4.33e-25
 
 Sum of variable loads
 x-direction:        0.00e+00
 y-direction:        0.00e+00
-z-direction:       -1.00e+06
+z-direction:        0.00e+00
 
 =========================================================================================================================
 
-     lbd_p    disp_p     lbd_v    disp_v     p/fcd    eps_cc   ip_cc    eps_ct     eps_s   ip_cc
-  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00       0  0.00e+00  0.00e+00       0
-  1.00e+00  1.12e-02  1.00e+00  4.33e-01  0.00e+00  0.00e+00       0  0.00e+00  0.00e+00       0
+     lbd_p    disp_p     lbd_v    disp_v     p/fcd    eps_cc    eps_ct     eps_s
+  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
+  1.00e+00  1.14e+01  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
 
 =========================================================================================================================
 
