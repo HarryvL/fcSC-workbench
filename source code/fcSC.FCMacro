@@ -43,6 +43,7 @@ fcSC_window.Load_Factor.setText("0.000")
 fcSC_window.eps_c.setText("0.000")
 fcSC_window.eps_s.setText("0.000")
 
+return_code = 0
 
 def prn_upd(*args):
     for obj in args:
@@ -87,6 +88,9 @@ try:
         mat_obj = []
         for i in range(num_mat_obj):
             mat_obj.append([float(val) for val in str(f.readline().strip()).split()])
+            for rho in mat_obj[-1][0:3]:
+                if rho <= 0.0:
+                    return_code = 5
 
 except:
     print("file not found")
@@ -95,10 +99,11 @@ except:
 # extract information from FreeCAD objects
 Gui.updateGui()
 t0 = time.time()
-doc, mesh, analysis, return_code = ft.setUpAnalysis()
+doc, mesh, analysis, return_code = ft.setUpAnalysis(return_code)
 t1 = time.time()
 t[0] = t1 - t0
 prn_upd(f"extract information from FreeCAD objects - time taken:  {t1 - t0:7.3f}  seconds\n")
+
 
 if return_code == 1:
     prn_upd("No mesh object. Please create one first")
@@ -106,8 +111,8 @@ elif return_code == 2:
     prn_upd("No mesh. Please generate mesh first")
 elif return_code == 3:
     prn_upd("No Analysis object. Please create one first")
-elif return_code == 4:
-    prn_upd("Not all elements belong to a material object")
+elif return_code == 5:
+    prn_upd("Encountered a zero or negative reinforcement ratio")
 
 if return_code == 0:
     # prepare finite element input
@@ -115,7 +120,7 @@ if return_code == 0:
     t0 = time.time()
     (elNodes, noCoord, fix, fixdof, movdof, elMat, noce, loadFaces, pressure, loadvertices, vertexloads,
      loadedges, edgeloads, loadfaces_uni, faceloads, ploadtype, vloadtype, eloadtype, floadtype, a_c, a_s,
-     ev, return_code) = ft.setUpInput(doc, mesh, analysis, mat_obj)
+     ev, return_code) = ft.setUpInput(doc, mesh, analysis, mat_obj, return_code)
 
     if return_code == 4:
         prn_upd("Not all elements belong to a material object")
@@ -141,7 +146,7 @@ if return_code == 0:
         Gui.updateGui()
         t0 = time.time()
 
-        displacements, stresses, epscc_new, epsct_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, maxloc_epscc, epsctplot, epssplot, maxloc_epss, fail, pdfcd = ft.calcDisp(
+        displacements, stresses, epscc_new, cw_new, sigmises, epss_new, lbdp, unp, lbdv, unv, crip, peeqplot, pplot, svmplot, pdfcdplot, epsccplot, maxloc_epscc, cwplot, epssplot, maxloc_epss, fail, pdfcd = ft.calcDisp(
             elNodes, noCoord, fixdof, movdof, modf, elMat,
             stm, row, col, glv_V, glv_P, nstep, iterat_max,
             error_max, relax, scale_re, scale_up, scale_dn, fcd, sig_yield, disp_output,
@@ -156,12 +161,12 @@ if return_code == 0:
             prn_upd("map stresses and strains to nodal points\n")
             t0 = time.time()
             averaged = fcSC_window.averagedChk.isChecked()
-            tet10stress, tet10epss, tet10epscc, tet10epsct, tet10svm, tet10pdfcd = ft.mapStresses(averaged, elNodes,
-                                                                                                  noCoord, stresses,
-                                                                                                  epscc_new, epsct_new,
-                                                                                                  sigmises, epss_new,
-                                                                                                  noce,
-                                                                                                  sig_yield, pdfcd)
+            tet10stress, tet10epss, tet10epscc, tet10cw, tet10svm, tet10pdfcd = ft.mapStresses(averaged, elNodes,
+                                                                                               noCoord, stresses,
+                                                                                               epscc_new, cw_new,
+                                                                                               sigmises, epss_new,
+                                                                                               noce,
+                                                                                               sig_yield, pdfcd)
             t1 = time.time()
             t[4] = t1 - t0
 
@@ -171,7 +176,7 @@ if return_code == 0:
             prn_upd("export results to VTK\n")
             t0 = time.time()
             VTKfile = os.path.join(mdir, "output files", name + '.vtk')
-            tet10rho = ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epscc, tet10epsct,
+            tet10rho = ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10epss, tet10epscc, tet10cw,
                                     tet10svm, tet10pdfcd, sig_yield, VTKfile)
             t1 = time.time()
             t[6] = t1 - t0
@@ -217,11 +222,11 @@ if return_code == 0:
                 "\n=========================================================================================================================\n\n")
             f.write(
                 "{0: >10}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >8}{7: >10}{8: >10}{9: >8}\n".format(
-                    "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "ip_cc", "eps_ct", "eps_s", "ip_cc"))
+                    "lbd_p", "disp_p", "lbd_v", "disp_v", "p/fcd", "eps_cc", "ip_cc", "cw", "eps_s", "ip_cc"))
             for i in range(len(lbdp)):
                 f.write(
                     '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >8}{7: >10.2e}{8: >10.2e}{9: >8}\n'.format(
-                        lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], maxloc_epscc[i], epsctplot[i],
+                        lbdp[i], unp[i], lbdv[i], unv[i], pdfcdplot[i], epsccplot[i], maxloc_epscc[i], cwplot[i],
                         epssplot[i], maxloc_epss[i]))
 
             f.write(
