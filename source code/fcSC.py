@@ -132,8 +132,8 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
     # node0 has binary node position 2^0 = 1, node1 = 2^1 = 2, ..., node10 = 2^10 = 1024
 
     # create connectivity array elNodes for mapping local node number -> global node number
-    elNodes = np.array(
-        [mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
+    # elNodes = np.array(
+    #     [mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
 
     # create nodal coordinate array nocoord for node number -> (x,y,z)
     ncv = list(mesh.FemMesh.Nodes.values())
@@ -152,7 +152,13 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
     else:
         element_sets = [es["FEMElements"] for es in member.mats_linear]
 
-    # print("element_sets: ", element_sets)
+    # create connectivity array elNodes for mapping local node number -> global node number
+    # elNodes = np.array(
+    #     [mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
+    elNodes = np.array(
+        [mesh.FemMesh.getElementNodes(el) for elset in element_sets for el in
+         elset])  # elNodes[elementIndex] = [node1,...,Node10]
+
     matCon = {}  # BooleanFragment Primitive the material object refers to
     ppEl = {}  # BooleanFragment Primitive element El belongs to
     materialbyElement = []  # see further
@@ -165,11 +171,11 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
         Density = float(App.Units.Quantity(matobject['Object'].Material['Density']).getValueAs('kg/mm^3'))
         prn_upd("Material Object: ", matobject['Object'].Name, "   E= ", E, "   Nu= ", Nu, "   Density= ", Density)
         prn_upd("rho: ", mat_obj[indm][0:3], "diameter: ", mat_obj[indm][3:6])
+        # print("number of elements in this set: ", len(element_sets[indm]))
         for el in element_sets[indm]:  # element_sets[indm]: all elements with material indm
             if matCon: ppEl[el] = matCon[indm]  # ppEl[el]: primitive el belongs to
             materialbyElement.append(
                 [E, Nu, Density] + mat_obj[indm])  # materialbyElement[elementIndex] = [E, Nu, Density]
-
     materialbyElement = np.asarray(materialbyElement)
 
     if (len(mesh.FemMesh.Volumes) != len(materialbyElement)):
@@ -831,16 +837,6 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
         esm = np.zeros((30, 30), dtype=np.float64)
         gamma = np.zeros((30), dtype=np.float64)
 
-        if float(nstep) == 1.0:
-            rhox = 0.0
-            rhoy = 0.0
-            rhoz = 0.0
-            Es = 0.0
-        else:
-            Es = 210000.0
-            rhox = materialbyElement[el][3]
-            rhoy = materialbyElement[el][4]
-            rhoz = materialbyElement[el][5]
         Ec = materialbyElement[el][0]
         density = materialbyElement[el][2]
 
@@ -857,19 +853,9 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_z, rhox, rhoy, rhoz, 
             # dmat = hooke(0, materialbyElement, 0,
             #              np.array(3 * [1.0]), np.array(6 * [1.0]), rhox, rhoy, rhoz, 210000.0)
 
-            dmatc = np.zeros((6, 6), dtype=np.float64)
-            dmatc[0][0] = dmatc[1][1] = dmatc[2][2] = Ec
-            dmatc[3][3] = dmatc[4][4] = dmatc[5][5] = Ec / 2.0
-
-            dmats = np.zeros((6, 6), dtype=np.float64)
-            dmats[0, 0] = rhox * Es
-            dmats[1, 1] = rhoy * Es
-            dmats[2, 2] = rhoz * Es
-
-            if model == 1:
-                dmat = dmatc + dmats
-            elif model == 2:
-                dmat = dmatc + dmats
+            dmat = np.zeros((6, 6), dtype=np.float64)
+            dmat[0][0] = dmat[1][1] = dmat[2][2] = Ec
+            dmat[3][3] = dmat[4][4] = dmat[5][5] = Ec / 2.0
 
             xi = ip[0]
             et = ip[1]
@@ -2570,7 +2556,8 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
                 for j in range(6):
                     tmp = sig[ipos2 + j]
                     for k in range(6):
-                        tmp += (dmatc[j, k] + dmats[j, k]) * eps[k]
+                        # tmp += (dmatc[j, k] + dmats[j, k]) * eps[k]
+                        tmp += dmatc[j, k] * eps[k]
                     sig_test[j] = tmp
             elif model == 2:
                 # elastic test stress concrete
@@ -2592,9 +2579,8 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
 
             prn = False
 
-            sxx, syy, szz, sxy, syz, szx, psdir, act_c, act_s, depscc, dcw, depss = concrete(
-                sig_test, sig[ipos2:ipos2 + 6], rhox, rhoy, rhoz, dx, dy, dz, fcd, sy, 0.0, step, iterat, prn, Ec,
-                model, nstep)
+            sxx, syy, szz, sxy, syz, szx, psdir, act_c, act_s, depscc, depss = concrete(
+                sig_test, rhox, rhoy, rhoz, fcd, sy, Ec, model, nstep)
 
             fck = 1.5 * fcd
             if fck < 50.0:
@@ -2602,18 +2588,21 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
             else:
                 fctm = 2.12 * np.log(1.0 + (fck + 8.0) / 10.0)
 
+            # print(xlv2[0], rhox, dx, Ec)
             s_x = 2 / 3 * dx / (3.6 * rhox)
             s_y = 2 / 3 * dy / (3.6 * rhoy)
             s_z = 2 / 3 * dz / (3.6 * rhoz)
 
             if model == 1 and float(nstep) > 1.0:
-                dlx = max(sig_test[0] / dmats[0][0], 0.0)  # steel strain
-                dly = max(sig_test[1] / dmats[1][1], 0.0)
-                dlz = max(sig_test[2] / dmats[2][2], 0.0)
-                # print(dlz)
-                cwx = max(dlx - 0.5 * fctm / dmats[0][0], 0.6 * dlx) * s_x
-                cwy = max(dly - 0.5 * fctm / dmats[1][1], 0.6 * dly) * s_y
-                cwz = max(dlz - 0.5 * fctm / dmats[2][2], 0.6 * dlz) * s_z
+                # total steel strain, assuming elastic response
+                dlxt = max(sxx / dmats[0][0], 0.0)
+                dlyt = max(syy / dmats[1][1], 0.0)
+                dlzt = max(szz / dmats[2][2], 0.0)
+                # crack width
+                cwx = max(dlxt - 0.5 * fctm / dmats[0][0], 0.6 * dlxt) * s_x
+                cwy = max(dlyt - 0.5 * fctm / dmats[1][1], 0.6 * dlyt) * s_y
+                cwz = max(dlzt - 0.5 * fctm / dmats[2][2], 0.6 * dlzt) * s_z
+                ncw = np.sqrt(cwx ** 2 + cwy ** 2 + cwz ** 2)
             elif model == 2:
                 sigc_update[ipos2:ipos2 + 6] = sxx, syy, szz, sxy, syz, szx
                 sxxs = min(rhox * sy, max(sigs_test[0], -rhox * sy))
@@ -2623,17 +2612,21 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
                     sxx += sxxs
                     syy += syys
                     szz += szzs
+                    # total steel strain, assuming elastic response
+                    dlxt = max(sxx / dmats[0][0], 0.0)
+                    dlyt = max(syy / dmats[1][1], 0.0)
+                    dlzt = max(szz / dmats[2][2], 0.0)
+                    # crack width
+                    cwx = max(dlxt - 0.5 * fctm / dmats[0][0], 0.6 * dlxt) * s_x
+                    cwy = max(dlyt - 0.5 * fctm / dmats[1][1], 0.6 * dlyt) * s_y
+                    cwz = max(dlzt - 0.5 * fctm / dmats[2][2], 0.6 * dlzt) * s_z
+                    ncw = np.sqrt(cwx ** 2 + cwy ** 2 + cwz ** 2)
+                    # plastic steel strain increment
+                    dlxp = max((sigs_test[0] - sxxs) / dmats[0, 0], 0.0)
+                    dlyp = max((sigs_test[1] - syys) / dmats[1, 1], 0.0)
+                    dlzp = max((sigs_test[2] - szzs) / dmats[2, 2], 0.0)
+                    depss = max(dlxp, dlyp, dlzp)
                 sigs_update[ipos2:ipos2 + 6] = sxxs, syys, szzs, 0.0, 0.0, 0.0
-                dlx = max(sigs_test[0] / dmats[0][0], 0.0)
-                dly = max(sigs_test[1] / dmats[1][1], 0.0)
-                dlz = max(sigs_test[2] / dmats[2][2], 0.0)
-                # print(sigs_test[2], szz, dlz)
-                depss = max(dlx, dly, dlz)
-                cwx = max(dlx - 0.5 * fctm / dmats[0][0], 0.6 * dlx) * s_x
-                cwy = max(dly - 0.5 * fctm / dmats[1][1], 0.6 * dly) * s_y
-                cwz = max(dlz - 0.5 * fctm / dmats[2][2], 0.6 * dlz) * s_z
-
-            ncw = np.sqrt(cwx ** 2 + cwy ** 2 + cwz ** 2)
 
             # print("cw: ", ncw)
 
@@ -2725,34 +2718,11 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
 
 @jit(nopython=True, cache=True, nogil=True)
-def concrete(sig_test, sig, rhox, rhoy, rhoz, dx, dy, dz, fcd, sig_yield, nu, step, iterat, prn, E, model, nstep):
+def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, E, model, nstep):
     a_c = np.array(3 * [0])
     a_s = np.array(3 * [1.0])
 
-    depss = 0.0
     ps1, ps2, ps3, psdir = calculate_principal_stress_ip(sig_test)
-
-    eps = (sig_test - sig) / E
-
-    e11 = eps[0]  # exx
-    e22 = eps[1]  # eyy
-    e33 = eps[2]  # ezz
-    e12 = eps[3]  # exy
-    e31 = eps[4]  # ezx
-    e23 = eps[5]  # eyz
-    epsm = np.array([
-        [e11, e12, e31],
-        [e12, e22, e23],
-        [e31, e23, e33]
-    ])
-
-    sx = 2 / 3 * dx / (3.6 * rhox)
-    sy = 2 / 3 * dy / (3.6 * rhoy)
-    sz = 2 / 3 * dz / (3.6 * rhoz)
-
-    s = 1 / (abs(psdir[0, 0]) / sx + abs(psdir[1, 0]) / sy + abs(psdir[2, 0]) / sz)
-
-    # print("crack spacing: ", s)
 
     if model == 1:
         fy1 = (rhox * psdir[0, 0] ** 2 + rhoy * psdir[1, 0] ** 2 + rhoz * psdir[2, 0] ** 2) * sig_yield
@@ -2774,19 +2744,12 @@ def concrete(sig_test, sig, rhox, rhoy, rhoz, dx, dy, dz, fcd, sig_yield, nu, st
         dl1 = max((ps1 - psr1) / E, 0.0)
         dl2 = max((ps2 - psr2) / E, 0.0)
         dl3 = max((ps3 - psr3) / E, 0.0)
-        dcw = s * dl1
-
-        deps1 = np.dot(psdir[:, 0], np.dot(epsm, psdir[:, 0].T))
-        dcw = s * max(deps1, 0.0)
 
         # plastic tensile strain increments steel
         dlx = dl1 * psdir[0, 0] ** 2 + dl2 * psdir[0, 1] ** 2 + dl3 * psdir[0, 2] ** 2
         dly = dl1 * psdir[1, 0] ** 2 + dl2 * psdir[1, 1] ** 2 + dl3 * psdir[1, 2] ** 2
         dlz = dl1 * psdir[2, 0] ** 2 + dl2 * psdir[2, 1] ** 2 + dl3 * psdir[2, 2] ** 2
         depss = max(dlx, dly, dlz)
-        # print("dl1, dl2, dl3: ", dl1, dl2, dl3)
-        # print("dlx, dly, dlz: ", dlx, dly, dlz)
-
 
     elif model == 2:
         # concrete stress
@@ -2800,12 +2763,6 @@ def concrete(sig_test, sig, rhox, rhoy, rhoz, dx, dy, dz, fcd, sig_yield, nu, st
         dl3 = -min((ps3 - psr3) / E, 0.0)
         depscc = max(dl1, dl2, dl3)
 
-        # plastic tensile strain increments concrete
-        dl1 = max((ps1 - psr1) / E, 0.0)
-        dl2 = max((ps2 - psr2) / E, 0.0)
-        dl3 = max((ps3 - psr3) / E, 0.0)
-        dcw = s * dl1
-
         if ps1 > 1.0e-3: a_c[0] = 1
         if ps2 > 1.0e-3: a_c[1] = 1
         if ps3 > 1.0e-3: a_c[2] = 1
@@ -2817,7 +2774,7 @@ def concrete(sig_test, sig, rhox, rhoy, rhoz, dx, dy, dz, fcd, sig_yield, nu, st
     else:
         sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = cartesian(psr1, psr2, psr3, psdir)
 
-    return sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx, psdir, a_c, a_s, depscc, dcw, depss
+    return sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx, psdir, a_c, a_s, depscc, depss
 
 
 @jit(nopython=True, cache=True, nogil=True)
