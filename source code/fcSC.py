@@ -2375,17 +2375,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
     dshpg1 = np.empty(10, dtype=np.float64)
     dshpg2 = np.empty(10, dtype=np.float64)
 
-    # dmatc = hooke(0, materialbyElement, 0, np.array(3 * [1.0]), np.array(6 * [1.0]), 0.0, 0.0, 0.0,
-    #               210000.0)  # elastic material stiffness matrix
-
-    # E = materialbyElement[0][0]  # Young's Modulus
-    # Es = 210000.0
-    # nu = materialbyElement[0][1]  # Poisson's Ratio
-    # nu = 0.0  # for simplified concrete analysis
-    # G = E / 2.0 / (1 + nu)  # shear modulus
-
-    first = True
-
     for el, nodes in enumerate(elNodes):
         rhox = materialbyElement[el][3]
         rhoy = materialbyElement[el][4]
@@ -2407,8 +2396,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
             xlv2[i] = co[2]
             # xlv[i] = co
 
-        elpos = 24 * el  # 4 integration points with 6 stress components each
-        elpos_s = 12 * el  # 4 integration points with 3 stress components each
         elv = np.zeros(30, dtype=np.float64)  # element load vector, 10 nodes with 3 load components each
 
         for index, nd in enumerate(nodes):
@@ -2540,8 +2527,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
                 eps[4] += bm5[j] * u10[j3] + bm6[j] * u10[j3 + 2]
                 eps[5] += bm7[j] * u10[j3 + 1] + bm8[j] * u10[j3 + 2]
 
-            # print("eps: ", eps)
-
             dmatc = np.zeros((6, 6), dtype=np.float64)
             dmatc[0][0] = dmatc[1][1] = dmatc[2][2] = Ec
             dmatc[3][3] = dmatc[4][4] = dmatc[5][5] = Ec / 2.0
@@ -2573,13 +2558,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
                         tmp += dmats[j, k] * eps[k]
                     sigs_test[j] = tmp
 
-            # print("sig_test_concrete: ", sig_test_concrete)
-
-            # sig_test_global[ipos2:ipos2 + 6] = sig_test
-
-            prn = False
-
-            sxx, syy, szz, sxy, syz, szx, psdir, act_c, act_s, depscc, depss = concrete(
+            sxx, syy, szz, sxxs, syys, szzs, sxy, syz, szx, psdir, act_c, act_s, depscc, depss, psr1, psr2, psr3 = concrete(
                 sig_test, rhox, rhoy, rhoz, fcd, sy, Ec, model, nstep)
 
             fck = 1.5 * fcd
@@ -2588,16 +2567,15 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
             else:
                 fctm = 2.12 * np.log(1.0 + (fck + 8.0) / 10.0)
 
-            # print(xlv2[0], rhox, dx, Ec)
             s_x = 2 / 3 * dx / (3.6 * rhox)
             s_y = 2 / 3 * dy / (3.6 * rhoy)
             s_z = 2 / 3 * dz / (3.6 * rhoz)
 
             if model == 1 and float(nstep) > 1.0:
                 # total steel strain, assuming elastic response
-                dlxt = max(sxx / dmats[0][0], 0.0)
-                dlyt = max(syy / dmats[1][1], 0.0)
-                dlzt = max(szz / dmats[2][2], 0.0)
+                dlxt = max(sxxs / dmats[0][0], 0.0)
+                dlyt = max(syys / dmats[1][1], 0.0)
+                dlzt = max(szzs / dmats[2][2], 0.0)
                 # crack width
                 cwx = max(dlxt - 0.5 * fctm / dmats[0][0], 0.6 * dlxt) * s_x
                 cwy = max(dlyt - 0.5 * fctm / dmats[1][1], 0.6 * dlyt) * s_y
@@ -2628,32 +2606,11 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
                     depss = max(dlxp, dlyp, dlzp)
                 sigs_update[ipos2:ipos2 + 6] = sxxs, syys, szzs, 0.0, 0.0, 0.0
 
-            # print("cw: ", ncw)
-
             sig_update[ipos2:ipos2 + 6] = sxx, syy, szz, sxy, syz, szx
-
-            # print(depsc)
 
             epscc_update[ipos1] = epscc[ipos1] + depscc
             cw_update[ipos1] = ncw
             epss_update[ipos1] = epss[ipos1] + depss
-
-            # if dcw > 0.1:
-            #     # print(rhox, rhoy, rhoz)
-            #     # print(dx, dy, dz)
-            #     # print(sx, sy, sz)
-            #     print(sig_test[0], sig_test[1], sig_test[2])
-            #     print(dmats[0][0], dmats[1][1], dmats[2][2])
-            #     print("0:", sigs_test[0] / dmats[0][0])
-            #     a = sig_test[0]
-            #     b = dmats[0][0]
-            #     print("0:", a / b)
-            #     print("1:", sigs_test[1] / dmats[1][1])
-            #     print("2:", sigs_test[2] / dmats[2][2])
-            #     print(dlx, dly, dlz)
-            #     print(dcwx, dcwy, dcwz)
-            #     print(dcw)
-            #     print(cw_update[ipos1])
 
             if act_c[0] == 1:
                 ev[ipos2:ipos2 + 3] = psdir[:, 0]
@@ -2724,57 +2681,71 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, E, model, nstep):
 
     ps1, ps2, ps3, psdir = calculate_principal_stress_ip(sig_test)
 
-    if model == 1:
-        fy1 = (rhox * psdir[0, 0] ** 2 + rhoy * psdir[1, 0] ** 2 + rhoz * psdir[2, 0] ** 2) * sig_yield
-        fy2 = (rhox * psdir[0, 1] ** 2 + rhoy * psdir[1, 1] ** 2 + rhoz * psdir[2, 1] ** 2) * sig_yield
-        fy3 = (rhox * psdir[0, 2] ** 2 + rhoy * psdir[1, 2] ** 2 + rhoz * psdir[2, 2] ** 2) * sig_yield
+    rho1 = rhox * psdir[0, 0] ** 2 + rhoy * psdir[1, 0] ** 2 + rhoz * psdir[2, 0] ** 2
+    rho2 = rhox * psdir[0, 1] ** 2 + rhoy * psdir[1, 1] ** 2 + rhoz * psdir[2, 1] ** 2
+    rho3 = rhox * psdir[0, 2] ** 2 + rhoy * psdir[1, 2] ** 2 + rhoz * psdir[2, 2] ** 2
 
-        # ignore concrete in tension
-        psr1 = min(fy1, max(ps1, -fcd - fy1))
-        psr2 = min(fy2, max(ps2, -fcd - fy2))
-        psr3 = min(fy3, max(ps3, -fcd - fy3))
+    if float(nstep) > 1.0:
+        if model == 1:
+            fy1 = rho1 * sig_yield
+            fy2 = rho2 * sig_yield
+            fy3 = rho3 * sig_yield
 
-        # plastic compressive strain increments concrete
-        dl1 = -min((ps1 - psr1) / E, 0.0)
-        dl2 = -min((ps2 - psr2) / E, 0.0)
-        dl3 = -min((ps3 - psr3) / E, 0.0)
-        depscc = max(dl1, dl2, dl3)
+            # ignore concrete in tension
+            psr1 = min(fy1, max(ps1, -fcd - fy1))
+            psr2 = min(fy2, max(ps2, -fcd - fy2))
+            psr3 = min(fy3, max(ps3, -fcd - fy3))
 
-        # plastic tensile strain increments concrete
-        dl1 = max((ps1 - psr1) / E, 0.0)
-        dl2 = max((ps2 - psr2) / E, 0.0)
-        dl3 = max((ps3 - psr3) / E, 0.0)
+            # plastic compressive strain increments concrete
+            dl1 = -min((ps1 - psr1) / E, 0.0)
+            dl2 = -min((ps2 - psr2) / E, 0.0)
+            dl3 = -min((ps3 - psr3) / E, 0.0)
+            depscc = max(dl1, dl2, dl3)
 
-        # plastic tensile strain increments steel
-        dlx = dl1 * psdir[0, 0] ** 2 + dl2 * psdir[0, 1] ** 2 + dl3 * psdir[0, 2] ** 2
-        dly = dl1 * psdir[1, 0] ** 2 + dl2 * psdir[1, 1] ** 2 + dl3 * psdir[1, 2] ** 2
-        dlz = dl1 * psdir[2, 0] ** 2 + dl2 * psdir[2, 1] ** 2 + dl3 * psdir[2, 2] ** 2
-        depss = max(dlx, dly, dlz)
+            # plastic tensile strain increments concrete
+            dl1 = max((ps1 - psr1) / E, 0.0)
+            dl2 = max((ps2 - psr2) / E, 0.0)
+            dl3 = max((ps3 - psr3) / E, 0.0)
 
-    elif model == 2:
-        # concrete stress
-        psr1 = min(0.0, max(ps1, -fcd))
-        psr2 = min(0.0, max(ps2, -fcd))
-        psr3 = min(0.0, max(ps3, -fcd))
+            # plastic tensile strain increments steel
+            dlx = dl1 * psdir[0, 0] ** 2 + dl2 * psdir[0, 1] ** 2 + dl3 * psdir[0, 2] ** 2
+            dly = dl1 * psdir[1, 0] ** 2 + dl2 * psdir[1, 1] ** 2 + dl3 * psdir[1, 2] ** 2
+            dlz = dl1 * psdir[2, 0] ** 2 + dl2 * psdir[2, 1] ** 2 + dl3 * psdir[2, 2] ** 2
+            depss = max(dlx, dly, dlz)
 
-        # plastic compressive strain increments concrete
-        dl1 = -min((ps1 - psr1) / E, 0.0)
-        dl2 = -min((ps2 - psr2) / E, 0.0)
-        dl3 = -min((ps3 - psr3) / E, 0.0)
-        depscc = max(dl1, dl2, dl3)
+        elif model == 2:
+            # concrete stress
+            psr1 = min(0.0, max(ps1, -fcd))
+            psr2 = min(0.0, max(ps2, -fcd))
+            psr3 = min(0.0, max(ps3, -fcd))
 
-        if ps1 > 1.0e-3: a_c[0] = 1
-        if ps2 > 1.0e-3: a_c[1] = 1
-        if ps3 > 1.0e-3: a_c[2] = 1
+            # plastic compressive strain increments concrete
+            dl1 = -min((ps1 - psr1) / E, 0.0)
+            dl2 = -min((ps2 - psr2) / E, 0.0)
+            dl3 = -min((ps3 - psr3) / E, 0.0)
+            depscc = max(dl1, dl2, dl3)
 
-        depss = 0.0
-    if float(nstep) == 1.0:
-        sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = sig_test[0], sig_test[1], sig_test[2], sig_test[3], sig_test[
-            4], sig_test[5]
-    else:
+            if ps1 > 1.0e-3: a_c[0] = 1
+            if ps2 > 1.0e-3: a_c[1] = 1
+            if ps3 > 1.0e-3: a_c[2] = 1
+
+            depss = 0.0
+
+        # steel tensile principal stress
+        psr1s = max(psr1, 0.0)
+        psr2s = max(psr2, 0.0)
+        psr3s = max(psr3, 0.0)
+
         sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = cartesian(psr1, psr2, psr3, psdir)
 
-    return sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx, psdir, a_c, a_s, depscc, depss
+        sigxx_s, sigyy_s, sigzz_s, _, _, _ = cartesian(psr1s, psr2s, psr3s, psdir)
+
+    else:
+        sigxx_c, sigyy_c, sigzz_c, sigxy, sigyz, sigzx = sig_test[0], sig_test[1], sig_test[2], sig_test[3], sig_test[
+            4], sig_test[5]
+        sigxx_s, sigyy_s, sigzz_s = 0.0, 0.0, 0.0
+
+    return sigxx_c, sigyy_c, sigzz_c, sigxx_s, sigyy_s, sigzz_s, sigxy, sigyz, sigzx, psdir, a_c, a_s, depscc, depss, psr1, psr2, psr3
 
 
 @jit(nopython=True, cache=True, nogil=True)
