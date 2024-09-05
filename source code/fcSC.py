@@ -290,7 +290,10 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
                         for faceID in mesh.FemMesh.getFacesByFace(ref):  # face ID: ID of a 6-node face element
                             face_nodes = list(mesh.FemMesh.getElementNodes(faceID))  # 6-node element node numbers
                             lf.append(face_nodes)
-                            pr.append(sign * obj.Pressure)
+                            if int(App.Version()[1]) < 22:
+                                pr.append(sign * obj.Pressure)
+                            else:
+                                pr.append(sign * float(App.Units.Quantity(obj.Pressure.getValueAs('MPa'))))
                             tp.append(perm)
                     else:
                         prn_upd("No Faces with Pressure Loads")
@@ -301,7 +304,11 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
                 perm = True
             else:
                 perm = False
-            F = obj.Force
+
+            if int(App.Version()[1]) < 22:
+                F = obj.Force
+            else:
+                F = float(App.Units.Quantity(obj.Force.getValuesAs('N')))
             d = obj.DirectionVector
             N = 0
             L = 0.0
@@ -2559,7 +2566,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
                     sigs_test[j] = tmp
 
             sxx, syy, szz, sxxs, syys, szzs, sxy, syz, szx, psdir, act_c, act_s, depscc, depss, psr1, psr2, psr3 = concrete(
-                sig_test, rhox, rhoy, rhoz, fcd, sy, Ec, model, nstep)
+                eps, sig_test, rhox, rhoy, rhoz, fcd, sy, Ec, model, nstep)
 
             fck = 1.5 * fcd
             if fck < 50.0:
@@ -2675,12 +2682,19 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
 
 @jit(nopython=True, cache=True, nogil=True)
-def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, E, model, nstep):
+def concrete(eps, sig_test, rhox, rhoy, rhoz, fcd, sig_yield, E, model, nstep):
     a_c = np.array(3 * [0])
     a_s = np.array(3 * [1.0])
 
     ps1, ps2, ps3, psdir = calculate_principal_stress_ip(sig_test)
+    ep1, ep2, ep3, _ = calculate_principal_stress_ip(eps)
 
+    # reduction factor for concrete compressive strength due to transverse cracking
+    eta1 = 1.0 / (1.0 + 80.0 * max(ep2, ep3, 0.0))
+    eta2 = 1.0 / (1.0 + 80.0 * max(ep3, ep1, 0.0))
+    eta3 = 1.0 / (1.0 + 80.0 * max(ep1, ep2, 0.0))
+
+    # effective reinforcement ratios in principal stress directions
     rho1 = rhox * psdir[0, 0] ** 2 + rhoy * psdir[1, 0] ** 2 + rhoz * psdir[2, 0] ** 2
     rho2 = rhox * psdir[0, 1] ** 2 + rhoy * psdir[1, 1] ** 2 + rhoz * psdir[2, 1] ** 2
     rho3 = rhox * psdir[0, 2] ** 2 + rhoy * psdir[1, 2] ** 2 + rhoz * psdir[2, 2] ** 2
@@ -2692,9 +2706,9 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, E, model, nstep):
             fy3 = rho3 * sig_yield
 
             # ignore concrete in tension
-            psr1 = min(fy1, max(ps1, -fcd - fy1))
-            psr2 = min(fy2, max(ps2, -fcd - fy2))
-            psr3 = min(fy3, max(ps3, -fcd - fy3))
+            psr1 = min(fy1, max(ps1, -eta1 * fcd - fy1))
+            psr2 = min(fy2, max(ps2, -eta2 * fcd - fy2))
+            psr3 = min(fy3, max(ps3, -eta3 * fcd - fy3))
 
             # plastic compressive strain increments concrete
             dl1 = -min((ps1 - psr1) / E, 0.0)
@@ -2715,9 +2729,9 @@ def concrete(sig_test, rhox, rhoy, rhoz, fcd, sig_yield, E, model, nstep):
 
         elif model == 2:
             # concrete stress
-            psr1 = min(0.0, max(ps1, -fcd))
-            psr2 = min(0.0, max(ps2, -fcd))
-            psr3 = min(0.0, max(ps3, -fcd))
+            psr1 = min(0.0, max(ps1, -eta1 * fcd))
+            psr2 = min(0.0, max(ps2, -eta2 * fcd))
+            psr3 = min(0.0, max(ps3, -eta3 * fcd))
 
             # plastic compressive strain increments concrete
             dl1 = -min((ps1 - psr1) / E, 0.0)
