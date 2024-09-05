@@ -290,7 +290,7 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
                         for faceID in mesh.FemMesh.getFacesByFace(ref):  # face ID: ID of a 6-node face element
                             face_nodes = list(mesh.FemMesh.getElementNodes(faceID))  # 6-node element node numbers
                             lf.append(face_nodes)
-                            if int(App.Version()[1]) < 22:
+                            if int(App.Version()[0]) < 1 and int(App.Version()[1]) < 22:
                                 pr.append(sign * obj.Pressure)
                             else:
                                 pr.append(sign * float(App.Units.Quantity(obj.Pressure.getValueAs('MPa'))))
@@ -305,7 +305,7 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
             else:
                 perm = False
 
-            if int(App.Version()[1]) < 22:
+            if int(App.Version()[0]) < 1 and int(App.Version()[1]) < 22:
                 F = obj.Force
             else:
                 F = float(App.Units.Quantity(obj.Force.getValuesAs('N')))
