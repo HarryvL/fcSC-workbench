@@ -90,7 +90,8 @@ try:
             mat_obj.append([float(val) for val in str(f.readline().strip()).split()])
             for rho in mat_obj[-1][0:3]:
                 if rho <= 0.0:
-                    return_code = 5
+                    pass
+                    # return_code = 5
 
 except:
     print("file not found")

@@ -2395,9 +2395,9 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, fcd, sig_yield
     dshpg2 = np.empty(10, dtype=np.float64)
 
     for el, nodes in enumerate(elNodes):
-        rhox = materialbyElement[el][3]
-        rhoy = materialbyElement[el][4]
-        rhoz = materialbyElement[el][5]
+        rhox = max(materialbyElement[el][3], 0.0005)
+        rhoy = max(materialbyElement[el][4], 0.0005)
+        rhoz = max(materialbyElement[el][5], 0.0005)
         dx = materialbyElement[el][6]
         dy = materialbyElement[el][7]
         dz = materialbyElement[el][8]
@@ -2755,7 +2755,7 @@ def concrete(eps, sig_test, rhox, rhoy, rhoz, fcd, fctm, sig_yield, E, model, ns
 
         elif model == 2:
             # concrete stress
-            fct = .33 * np.sqrt(fcd)
+            fct = .1 * np.sqrt(fcd)
 
             psr1 = min(fct / (1 + np.sqrt(500 * max(ep1, 0.0))), max(ps1, -eta1 * fcd))
             psr2 = min(fct / (1 + np.sqrt(500 * max(ep2, 0.0))), max(ps2, -eta2 * fcd))
