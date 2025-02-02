@@ -36,8 +36,8 @@ import sys
 import dummySC
 import FreeCAD
 import FreeCADGui
-from PySide2 import QtWidgets, QtGui, QtCore
-from PySide2.QtWidgets import QTableWidgetItem
+from PySide import QtWidgets, QtGui, QtCore
+from PySide.QtWidgets import QTableWidgetItem
 
 global FCmw
 FCmw = FreeCADGui.getMainWindow()
@@ -68,7 +68,7 @@ class fcSCWorkbench(Workbench):
         return "Gui::PythonWorkbench"
 
     def Initialize(self):
-        from PySide2 import QtGui
+        from PySide import QtGui
         self.appendToolbar("fcSC", [])
         self.appendMenu("fcSC", [])
         self.palette_warning = QtGui.QPalette()
@@ -78,7 +78,7 @@ class fcSCWorkbench(Workbench):
         # self.palette.setColor(QtGui.QPalette.Text, QtGui.QColor("red"))
 
     def Activated(self):
-        from PySide2 import QtCore
+        from PySide import QtCore
         global fcSC_window
 
         import dummySC
@@ -219,8 +219,8 @@ class fcSCWorkbench(Workbench):
         #
         # objID = {row : App::MaterialObjectPython}
         #
-        from PySide2.QtWidgets import QTableWidgetItem
-        from PySide2.QtGui import QFontMetrics
+        from PySide.QtWidgets import QTableWidgetItem
+        from PySide.QtGui import QFontMetrics
         max_width = 0
         tw = fcSC_window.tableWidget
         font_metrics = QFontMetrics(tw.font())
@@ -257,7 +257,7 @@ class fcSCWorkbench(Workbench):
         FreeCAD.removeDocumentObserver(self.obs)
 
     def start_clicked(self):
-        from PySide2 import QtWidgets
+        from PySide import QtWidgets
 
         self.save_clicked()
 
