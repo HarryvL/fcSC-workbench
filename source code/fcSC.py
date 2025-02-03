@@ -121,7 +121,7 @@ def setUpInput(doc, mesh, analysis, mat_obj, return_code):
 
     if solver == None:
         FemGui.setActiveAnalysis(App.activeDocument().Analysis)
-        FemGui.getActiveAnalysis().addObject(ObjectsFem.makeSolverCalculixCcxTools(App.ActiveDocument))
+        FemGui.getActiveAnalysis().addObject(ObjectsFem.makeSolverCalculiXCcxTools(App.ActiveDocument))
         solver = doc.getObject("SolverCcxTools")
 
     # determine elements connected to a node using FC API

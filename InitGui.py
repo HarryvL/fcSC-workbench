@@ -61,8 +61,9 @@ class fcSCWorkbench(Workbench):
     ToolTip = "Simplified plastic collapse analysis of Structural Concrete"
 
     def __init__(self):
-        import task_result_mechanical
-        sys.modules["femtaskpanels.task_result_mechanical"] = sys.modules[task_result_mechanical.__name__]
+        # import task_result_mechanical
+        # sys.modules["femtaskpanels.task_result_mechanical"] = sys.modules[task_result_mechanical.__name__]
+        pass
 
     def GetClassName(self):
         return "Gui::PythonWorkbench"
